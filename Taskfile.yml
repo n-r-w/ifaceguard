@@ -1,0 +1,30 @@
+version: "3"
+
+tasks:
+  lint:
+    cmds:
+      - golangci-lint run --config .golangci.yml ./...
+  test:
+    cmds:
+      - go test -race ./...
+  build:
+    dir: ./build
+    cmds:
+      - go build -o ./../bin/ifaceguard ./../cmd/ifaceguard
+      - golangci-lint custom --version $(cat ../.golangci-version) --destination ./../bin/
+  fmt:
+    cmds:
+      - go fmt ./...
+  generate:
+    cmds:
+      - go generate ./...
+  check:
+    deps:
+      - lint
+      - test
+  test:custom:
+    deps:
+      - build
+    dir: ./internal/analyzer/testdata/src
+    cmds:
+      - GOWORK=off ../../../../bin/custom-gcl run --issues-exit-code=0 -c ../../../../build/.golangci.yml ./...

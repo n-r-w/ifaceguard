@@ -1,0 +1,5 @@
+# version is provided via --version (from .golangci-version)
+plugins:
+  - module: "github.com/n-r-w/ifaceguard"
+    import: "github.com/n-r-w/ifaceguard/pkg/golangci"
+    path: ./../
