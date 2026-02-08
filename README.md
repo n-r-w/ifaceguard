@@ -71,21 +71,17 @@ For **local development** (plugin not yet published):
 Create `.custom-gcl.yml` in your project root:
 
 ```yaml
-version: v2.7.2  # golangci-lint version used to build the custom binary
-
 plugins:
   - module: 'github.com/n-r-w/ifaceguard'
     import: 'github.com/n-r-w/ifaceguard/pkg/golangci'
     path: /absolute/path/to/ifaceguard  # Use absolute path
 ```
 
-Note: the `version` field controls which golangci-lint version is used to build the custom binary. If it differs from the version you normally run, the custom binary will still be built for the version specified here.
+Note: in this repository, use `task build` to build both the standalone binary and the custom golangci-lint binary. The Taskfile uses `.golangci-version` and the repo's `build/.custom-gcl.yml`.
 
 For **published plugin** (after release):
 
 ```yaml
-version: v2.7.2
-
 plugins:
   - module: 'github.com/n-r-w/ifaceguard'
     import: 'github.com/n-r-w/ifaceguard/pkg/golangci'
@@ -95,7 +91,7 @@ plugins:
 Build the custom golangci-lint binary:
 
 ```bash
-golangci-lint custom
+task build
 ```
 
 Then enable in your `.golangci.yml`:
@@ -458,6 +454,11 @@ exclude:
 ## Requirements
 
 - Go 1.22+
+
+## Release
+
+Releases are built by GitHub Actions on tags matching `v*` using GoReleaser v2.
+The configuration is in `.goreleaser.yml` (with `version: 2`).
 
 ## Development
 
