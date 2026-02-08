@@ -1,3 +1,5 @@
+version: 2
+
 project_name: ifaceguard
 
 builds:
@@ -19,7 +21,7 @@ builds:
 
 archives:
   - id: ifaceguard
-    builds:
+    ids:
       - ifaceguard
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
