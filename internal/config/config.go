@@ -60,6 +60,10 @@ type AssertionsConfig struct {
 	// RequireAssertions enables checking that each type implementing a contractual
 	// interface from another package has at least one assertion in an allowed location.
 	RequireAssertions bool
+
+	// RequireAssertionsStrict disables relevance filtering for requireassertions.
+	// When true, any matching contractual interface in the module can trigger IFG003.
+	RequireAssertionsStrict bool
 }
 
 // ExcludeConfig contains global exclusion rules applied to all checks.

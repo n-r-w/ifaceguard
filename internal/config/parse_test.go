@@ -152,6 +152,7 @@ func TestParseFromAny_UnknownAssertionsKeys(t *testing.T) {
 	assert.Contains(t, err.Error(), "unknown keys in assertions")
 	assert.Contains(t, err.Error(), "ruleb")
 	assert.Contains(t, err.Error(), "requireassertions")
+	assert.Contains(t, err.Error(), "requireassertionsstrict")
 	assert.Contains(t, err.Error(), "scanfunctionbodies")
 	assert.Contains(t, err.Error(), "acceptconversiononlyform")
 }
@@ -200,6 +201,7 @@ func TestParseFromAny_AssertionsSettings(t *testing.T) {
 			"acceptconversiononlyform": true,
 			"scanfunctionbodies":       true,
 			"requireassertions":        true,
+			"requireassertionsstrict":  true,
 		},
 	}
 
@@ -211,6 +213,7 @@ func TestParseFromAny_AssertionsSettings(t *testing.T) {
 	assert.True(t, cfg.Assertions.AcceptConversionOnlyForm)
 	assert.True(t, cfg.Assertions.ScanFunctionBodies)
 	assert.True(t, cfg.Assertions.RequireAssertions)
+	assert.True(t, cfg.Assertions.RequireAssertionsStrict)
 }
 
 func TestParseFromAny_AllSettings(t *testing.T) {
@@ -231,6 +234,7 @@ func TestParseFromAny_AllSettings(t *testing.T) {
 			"acceptconversiononlyform": true,
 			"scanfunctionbodies":       true,
 			"requireassertions":        true,
+			"requireassertionsstrict":  true,
 		},
 		"exclude": map[string]any{
 			"files": []string{".*_mock\\.go$"},
@@ -256,6 +260,7 @@ func TestParseFromAny_AllSettings(t *testing.T) {
 	assert.True(t, cfg.Assertions.AcceptConversionOnlyForm)
 	assert.True(t, cfg.Assertions.ScanFunctionBodies)
 	assert.True(t, cfg.Assertions.RequireAssertions)
+	assert.True(t, cfg.Assertions.RequireAssertionsStrict)
 
 	// Verify Exclude.
 	assert.Equal(t, []string{".*_mock\\.go$"}, cfg.Exclude.Files)

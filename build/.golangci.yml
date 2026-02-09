@@ -3,6 +3,7 @@ run:
   issues-exit-code: 1
   tests: true
 output:
+  path-mode: "abs"
   formats:
     text:
       path: stdout

@@ -62,6 +62,7 @@ func TestResolveEffective_OtherFieldsCopied(t *testing.T) {
 			AcceptConversionOnlyForm: true,
 			ScanFunctionBodies:       true,
 			RequireAssertions:        true,
+			RequireAssertionsStrict:  true,
 		},
 		Exclude: config.ExcludeConfig{
 			Files: []string{".*_mock\\.go$"},
@@ -119,6 +120,7 @@ func TestEffectiveConfig_Compile_RegexPatterns(t *testing.T) {
 			AcceptConversionOnlyForm: false,
 			ScanFunctionBodies:       false,
 			RequireAssertions:        false,
+			RequireAssertionsStrict:  false,
 		},
 		Exclude: config.ExcludeConfig{
 			Files: []string{`.*_mock\.go$`},
@@ -165,6 +167,7 @@ func TestEffectiveConfig_Compile_InvalidRegex_ReturnsError(t *testing.T) {
 			AcceptConversionOnlyForm: false,
 			ScanFunctionBodies:       false,
 			RequireAssertions:        false,
+			RequireAssertionsStrict:  false,
 		},
 		Exclude: config.ExcludeConfig{
 			Files: nil,

@@ -4,7 +4,7 @@ package ownership_anyexp_basic
 
 // Runner is an EXPORTED interface - with contractscope=anyexported, it IS contractual
 // regardless of whether it appears in exported API surfaces.
-type Runner interface { // want `IFG001-OWNERSHIP: interface ifaceguard-testdata/ownership_anyexp_basic\.Runner has implementation ifaceguard-testdata/ownership_anyexp_basic\.Service`
+type Runner interface { // want `IFG001-OWNERSHIP: interface Runner has implementation Service in same package; move interface to consumer package or dedicated contract package`
 	Run() error
 }
 

@@ -21,11 +21,27 @@ A Go linter that checks architectural properties of interface usage.
 
 These checks can be enabled or disabled independently via `ownership.enabled` and `assertions.enabled`.
 
+## Project Status
+
+`ifaceguard` is in early development. The core analysis logic is implemented and tested, but the configuration and CLI are still evolving. Breaking changes to config keys and behavior are expected until the first stable release.
+
 ## Installation
 
 ```bash
 go install github.com/n-r-w/ifaceguard/cmd/ifaceguard@latest
 ```
+
+### From releases
+
+Prebuilt artifacts are published on the [GitHub Releases page](https://github.com/n-r-w/ifaceguard/releases).
+
+Release assets include:
+
+- **Standalone `ifaceguard` binary**, named `ifaceguard_<version>_<os>_<arch>`.
+- **Custom golangci-lint binary** built with the plugin, named `custom-gcl_<os>_<arch>` (Windows adds `.exe`).
+
+Choose the asset that matches your OS/arch, extract it if needed, and place the binary on your `PATH`.
+On macOS, if the system blocks the binary, open System Settings > Privacy & Security and allow it, then run again.
 
 ## Usage
 
@@ -52,21 +68,29 @@ ownership:
   enabled: true
   contractscope: exportedoutput
   skipifusedasinput: true
+  contractpackages: []
+  ignoreinterfaces: []
+  ignoremarkerinterfaces: true
 assertions:
   enabled: true
   wiringpackages: []
   acceptconversiononlyform: false
   scanfunctionbodies: false
   requireassertions: false
+  requireassertionsstrict: false
 exclude:
-  files: []
-  types: []
+  # Regexes applied to full file paths
+  files:
+    - ".*_mock\\.go$"
+  # Regexes applied to full type names: pkgpath.TypeName
+  types:
+    - ".*\\.Mock.*$"
 ```
 
 
 ### golangci-lint (module plugin)
 
-For **local development** (plugin not yet published):
+For **local development** (plugin not integrated into official golangci-lint):
 
 Create `.custom-gcl.yml` in your project root:
 
@@ -124,6 +148,7 @@ settings:
           acceptconversiononlyform: false
           scanfunctionbodies: false
           requireassertions: false
+          requireassertionsstrict: false
         exclude:
           # Regexes applied to full file paths
           files:
@@ -131,7 +156,6 @@ settings:
           # Regexes applied to full type names: pkgpath.TypeName
           types:
             - ".*\\.Mock.*$"
-
 ```
 
 ### Configuration options
@@ -154,6 +178,8 @@ settings:
 - `acceptconversiononlyform` (bool, default: false): if true, also treats `var _ = iface((*T)(nil))` as a valid assertion form (conversion-only form).
 - `scanfunctionbodies` (bool, default: false): if true, scans inside function bodies for `var _ I = ...` assertions. When false, only package-level `var` declarations are scanned.
 - `requireassertions` (bool, default: false): if true, requires at least one recognized assertion in the **implementation package** for each type that implements a contractual interface from another package; reports IFG003 when missing.
+  When enabled, ifaceguard scans all packages in the current module to find contractual interfaces, so missing assertions are reported even if the implementation package does not reference the interface directly.
+- `requireassertionsstrict` (bool, default: false): if true, disables the relevance filter for IFG003 and reports missing assertions for any matching contractual interface in the module, even when no direct import/co-import evidence exists.
 
 #### `exclude`
 
@@ -454,24 +480,14 @@ exclude:
 ## Requirements
 
 - Go 1.22+
+- https://taskfile.dev/
+- https://golangci-lint.run/
 
-## Release
+## Development Commands
 
-Releases are built by GitHub Actions on tags matching `v*` using GoReleaser v2.
-The configuration is in `.goreleaser.yml` (with `version: 2`).
-
-## Development
-
-```bash
-# Build
-task build
-
-# Run tests
-task test
-
-# Run linter
-task lint
-
-# Run all checks
-task check
-```
+- `task lint` - Run linter
+- `task test` - Run all tests
+- `task build` - Build custom golangci-lint with ifaceguard linter and ifaceguard binary
+- `task fmt` - Format Go code
+- `task check` - Run lint and test (full validation)
+- `task test:custom` - Test custom `bin/custom-gcl` linter on this codebase. This is a "negative" test that should return errors, as the test data intentionally violates the rules.

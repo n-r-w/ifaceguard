@@ -22,6 +22,7 @@ type CompiledAssertionsConfig struct {
 	AcceptConversionOnlyForm bool
 	ScanFunctionBodies       bool
 	RequireAssertions        bool
+	RequireAssertionsStrict  bool
 }
 
 // CompiledExcludeConfig contains compiled exclusion patterns.
@@ -95,6 +96,7 @@ func compileAssertions(assertions AssertionsConfig) (CompiledAssertionsConfig, e
 		AcceptConversionOnlyForm: assertions.AcceptConversionOnlyForm,
 		ScanFunctionBodies:       assertions.ScanFunctionBodies,
 		RequireAssertions:        assertions.RequireAssertions,
+		RequireAssertionsStrict:  assertions.RequireAssertionsStrict,
 	}, nil
 }
 

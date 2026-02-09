@@ -476,6 +476,21 @@ func TestAssertions_RequireAssertions_MissingAssertion(t *testing.T) {
 	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_missing/impl")
 }
 
+func TestAssertions_RequireAssertions_MissingAssertion_NoReference(t *testing.T) {
+	t.Parallel()
+
+	testdataDir := moduleTestdataDir(t)
+	cfg := config.Default()
+	cfg.Assertions.RequireAssertions = true
+	scope := config.ContractScopeAnyExported
+	cfg.Ownership.ContractScope = &scope
+
+	a, err := analyzer.New(cfg)
+	require.NoError(t, err)
+
+	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_noref/impl")
+}
+
 func TestAssertions_RequireAssertions_AssertionPresent(t *testing.T) {
 	t.Parallel()
 
@@ -489,6 +504,53 @@ func TestAssertions_RequireAssertions_AssertionPresent(t *testing.T) {
 	require.NoError(t, err)
 
 	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_present/impl")
+}
+
+func TestAssertions_RequireAssertions_GenericReceiver(t *testing.T) {
+	t.Parallel()
+
+	testdataDir := moduleTestdataDir(t)
+	cfg := config.Default()
+	cfg.Assertions.RequireAssertions = true
+	scope := config.ContractScopeAnyExported
+	cfg.Ownership.ContractScope = &scope
+
+	a, err := analyzer.New(cfg)
+	require.NoError(t, err)
+
+	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_generic/impl")
+}
+
+func TestAssertions_RequireAssertions_Strict_Disabled_NoCoImport(t *testing.T) {
+	t.Parallel()
+
+	testdataDir := moduleTestdataDir(t)
+	cfg := config.Default()
+	cfg.Assertions.RequireAssertions = true
+	cfg.Assertions.RequireAssertionsStrict = false
+	scope := config.ContractScopeAnyExported
+	cfg.Ownership.ContractScope = &scope
+
+	a, err := analyzer.New(cfg)
+	require.NoError(t, err)
+
+	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_strict_nodiag/impl")
+}
+
+func TestAssertions_RequireAssertions_Strict_Enabled_NoCoImport(t *testing.T) {
+	t.Parallel()
+
+	testdataDir := moduleTestdataDir(t)
+	cfg := config.Default()
+	cfg.Assertions.RequireAssertions = true
+	cfg.Assertions.RequireAssertionsStrict = true
+	scope := config.ContractScopeAnyExported
+	cfg.Ownership.ContractScope = &scope
+
+	a, err := analyzer.New(cfg)
+	require.NoError(t, err)
+
+	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_strict/impl")
 }
 
 // =============================================================================

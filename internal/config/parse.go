@@ -114,6 +114,10 @@ func parseAssertionsSettings(assertions *AssertionsConfig, m map[string]any) err
 		assertions.RequireAssertions = v
 	}
 
+	if v, ok := getBool(section, "requireassertionsstrict"); ok {
+		assertions.RequireAssertionsStrict = v
+	}
+
 	return nil
 }
 
@@ -180,6 +184,7 @@ func allowedAssertionsKeys() []string {
 		"acceptconversiononlyform",
 		"scanfunctionbodies",
 		"requireassertions",
+		"requireassertionsstrict",
 	}
 }
 

@@ -18,6 +18,7 @@ func Default() Config {
 			AcceptConversionOnlyForm: false,
 			ScanFunctionBodies:       false,
 			RequireAssertions:        false,
+			RequireAssertionsStrict:  false,
 		},
 		Exclude: ExcludeConfig{
 			Files: nil,

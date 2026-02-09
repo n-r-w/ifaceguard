@@ -3,16 +3,20 @@
 package analyzer
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
+	"os"
 	"path/filepath"
 	"regexp"
+	"sync"
 
 	"github.com/n-r-w/ifaceguard/internal/config"
 	"github.com/n-r-w/ifaceguard/internal/typeutil"
 	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/packages"
 )
 
 // AnalyzerName is the identifier used for the analyzer in reports and configuration.
@@ -21,11 +25,17 @@ const (
 	ownershipID      = "IFG001-OWNERSHIP"
 	assertionsID     = "IFG002-ASSERTION-PLACEMENT"
 	assertionsMissID = "IFG003-ASSERTION-MISSING"
+	minCoImportCount = 2
 )
 
 // analyzerState holds configuration and dependencies for the analyzer.
 type analyzerState struct {
 	cfg config.Config
+
+	globalDataOnce   sync.Once
+	globalInterfaces []*interfaceRefInfo
+	globalCoImports  map[string]map[string]struct{}
+	globalDataErr    error
 }
 
 // New creates a new ifaceguard analyzer.
@@ -35,6 +45,7 @@ func New(cfg config.Config) (*analysis.Analyzer, error) {
 }
 
 func newAnalyzer(cfg config.Config) (*analysis.Analyzer, error) {
+	//nolint:exhaustruct // global cache fields are optional and initialized lazily
 	a := &analyzerState{cfg: cfg}
 	//nolint:exhaustruct // zero values are appropriate for optional fields
 	return &analysis.Analyzer{
@@ -56,7 +67,9 @@ func (a *analyzerState) run(pass *analysis.Pass) (any, error) {
 
 	// Assertions rule: check compile-time assertion placement.
 	if compiled.Assertions.Enabled {
-		a.checkAssertions(pass, compiled.Ownership, compiled.Assertions, compiled.Exclude)
+		if err := a.checkAssertions(pass, compiled.Ownership, compiled.Assertions, compiled.Exclude); err != nil {
+			return nil, err
+		}
 	}
 
 	// Ownership rule: check interface ownership violations.
@@ -81,7 +94,7 @@ func (a *analyzerState) checkAssertions(
 	ownership config.CompiledOwnershipConfig,
 	assertionsCfg config.CompiledAssertionsConfig,
 	exclude config.CompiledExcludeConfig,
-) {
+) error {
 	var assertions []assertionInfo
 	for _, file := range pass.Files {
 		if isFileExcluded(pass.Fset, file.Pos(), exclude) {
@@ -101,8 +114,10 @@ func (a *analyzerState) checkAssertions(
 	}
 
 	if assertionsCfg.RequireAssertions {
-		a.checkAssertionsRequireAssertions(pass, ownership, exclude, assertions)
+		return a.checkAssertionsRequireAssertions(pass, ownership, assertionsCfg, exclude, assertions)
 	}
+
+	return nil
 }
 
 func (a *analyzerState) checkVarDecl(
@@ -258,10 +273,10 @@ func (a *analyzerState) checkAssertionSpec(
 
 		// Report violation at the variable declaration position.
 		msg := fmt.Sprintf(
-			"%s: compile-time assertion for type %s.%s should be in package %s "+
+			"%s: compile-time assertion for type %s should be in package %s "+
 				"(or in an allowed wiring package). Current package: %s.",
 			assertionsID,
-			implPkg.Name(), implType.Obj().Name(),
+			implType.Obj().Name(),
 			implPkg.Name(),
 			currentPkg.Name(),
 		)
@@ -435,34 +450,378 @@ func fullNamedTypeName(named *types.Named) (string, bool) {
 	return pkg.Path() + "." + obj.Name(), true
 }
 
-func (a *analyzerState) checkAssertionsRequireAssertions(
+func moduleRootFromPass(pass *analysis.Pass) (string, error) {
+	if pass == nil {
+		return "", errors.New("pass is nil")
+	}
+	for _, file := range pass.Files {
+		if file == nil {
+			continue
+		}
+		pos := file.Pos()
+		if !pos.IsValid() {
+			continue
+		}
+		f := pass.Fset.File(pos)
+		if f == nil || f.Name() == "" {
+			continue
+		}
+		return findModuleRoot(filepath.Dir(f.Name()))
+	}
+	return "", errors.New("unable to locate module root from package files")
+}
+
+func findModuleRoot(startDir string) (string, error) {
+	if startDir == "" {
+		return "", errors.New("start directory is empty")
+	}
+	current := filepath.Clean(startDir)
+	for {
+		candidate := filepath.Join(current, "go.mod")
+		if _, err := os.Stat(candidate); err == nil {
+			return current, nil
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+	return "", fmt.Errorf("go.mod not found starting from %s", startDir)
+}
+
+func (a *analyzerState) loadGlobalState(
 	pass *analysis.Pass,
 	ownership config.CompiledOwnershipConfig,
 	exclude config.CompiledExcludeConfig,
-	assertionInfos []assertionInfo,
-) {
-	if ownership.ContractScope == nil {
+) ([]*interfaceRefInfo, map[string]map[string]struct{}, error) {
+	a.globalDataOnce.Do(func() {
+		a.globalInterfaces, a.globalCoImports, a.globalDataErr = collectGlobalState(pass, ownership, exclude)
+	})
+	return a.globalInterfaces, a.globalCoImports, a.globalDataErr
+}
+
+func collectGlobalState(
+	pass *analysis.Pass,
+	ownership config.CompiledOwnershipConfig,
+	exclude config.CompiledExcludeConfig,
+) ([]*interfaceRefInfo, map[string]map[string]struct{}, error) {
+	moduleRoot, err := moduleRootFromPass(pass)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mode := packages.NeedName |
+		packages.NeedTypes |
+		packages.NeedTypesInfo |
+		packages.NeedSyntax |
+		packages.NeedFiles |
+		packages.NeedImports |
+		packages.NeedCompiledGoFiles
+
+	//nolint:exhaustruct // only relevant fields are set for package loading
+	pkgs, err := packages.Load(&packages.Config{
+		Mode:  mode,
+		Dir:   moduleRoot,
+		Tests: false,
+	}, "./...")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	result := make([]*interfaceRefInfo, 0)
+	coImports := collectCoImports(pkgs)
+	seen := make(map[string]struct{})
+	packages.Visit(pkgs, func(pkg *packages.Package) bool {
+		if packageIsSkippable(pkg) {
+			return true
+		}
+
+		packagePass := buildPackagePass(pkg)
+		interfaces := collectPackageInterfaces(packagePass, pkg.Syntax, exclude)
+		if len(interfaces) == 0 {
+			return true
+		}
+
+		contractual := contractualInterfacesForPackage(
+			packagePass,
+			pkg.Syntax,
+			interfaces,
+			ownership,
+			exclude,
+		)
+		appendContractualInterfaces(&result, seen, interfaces, contractual, ownership, exclude, packagePass)
+		return true
+	}, nil)
+
+	return result, coImports, nil
+}
+
+func packageIsSkippable(pkg *packages.Package) bool {
+	if pkg == nil || pkg.Types == nil || pkg.TypesInfo == nil || pkg.Fset == nil {
+		return true
+	}
+	if pkg.ForTest != "" {
+		return true
+	}
+	if len(pkg.Errors) > 0 {
+		return true
+	}
+	return len(pkg.Syntax) == 0
+}
+
+func collectCoImports(pkgs []*packages.Package) map[string]map[string]struct{} {
+	result := make(map[string]map[string]struct{})
+	packages.Visit(pkgs, func(pkg *packages.Package) bool {
+		if pkg == nil || pkg.PkgPath == "" {
+			return true
+		}
+		if pkg.ForTest != "" {
+			return true
+		}
+		if len(pkg.Imports) < minCoImportCount {
+			return true
+		}
+
+		importPaths := make([]string, 0, len(pkg.Imports))
+		for _, imported := range pkg.Imports {
+			if imported == nil || imported.PkgPath == "" {
+				continue
+			}
+			importPaths = append(importPaths, imported.PkgPath)
+		}
+		for i := range importPaths {
+			for j := range importPaths[i+1:] {
+				left := importPaths[i]
+				right := importPaths[i+1+j]
+				addCoImport(result, left, right)
+				addCoImport(result, right, left)
+			}
+		}
+
+		return true
+	}, nil)
+
+	return result
+}
+
+func addCoImport(result map[string]map[string]struct{}, left string, right string) {
+	if left == "" || right == "" {
 		return
+	}
+	set, exists := result[left]
+	if !exists {
+		set = make(map[string]struct{})
+		result[left] = set
+	}
+	set[right] = struct{}{}
+}
+
+func buildPackagePass(pkg *packages.Package) *analysis.Pass {
+	//nolint:exhaustruct // only required fields are set for helper functions
+	return &analysis.Pass{
+		TypesInfo: pkg.TypesInfo,
+		Fset:      pkg.Fset,
+	}
+}
+
+func collectPackageInterfaces(
+	pass *analysis.Pass,
+	files []*ast.File,
+	exclude config.CompiledExcludeConfig,
+) []*interfaceInfo {
+	var interfaces []*interfaceInfo
+	var implCandidates []*types.Named
+	for _, file := range files {
+		if file == nil {
+			continue
+		}
+		if isFileExcluded(pass.Fset, file.Pos(), exclude) {
+			continue
+		}
+		collectTypesFromFile(pass, file, &interfaces, &implCandidates)
+	}
+	return interfaces
+}
+
+func contractualInterfacesForPackage(
+	pass *analysis.Pass,
+	files []*ast.File,
+	interfaces []*interfaceInfo,
+	ownership config.CompiledOwnershipConfig,
+	exclude config.CompiledExcludeConfig,
+) map[*types.TypeName]bool {
+	contractual := make(map[*types.TypeName]bool)
+	if ownership.ContractScope == nil {
+		return contractual
+	}
+
+	switch *ownership.ContractScope {
+	case config.ContractScopeAnyExported:
+		for _, ifaceInfo := range interfaces {
+			if ifaceInfo.typeName.Exported() {
+				contractual[ifaceInfo.typeName] = true
+			}
+		}
+	case config.ContractScopeExportedOutput:
+		for _, file := range files {
+			if file == nil {
+				continue
+			}
+			if isFileExcluded(pass.Fset, file.Pos(), exclude) {
+				continue
+			}
+			collectExportedOutputSurfaces(pass, file, interfaces, contractual, ownership.SkipIfUsedAsInput)
+		}
+	}
+
+	return contractual
+}
+
+func appendContractualInterfaces(
+	result *[]*interfaceRefInfo,
+	seen map[string]struct{},
+	interfaces []*interfaceInfo,
+	contractual map[*types.TypeName]bool,
+	ownership config.CompiledOwnershipConfig,
+	exclude config.CompiledExcludeConfig,
+	pass *analysis.Pass,
+) {
+	if len(contractual) == 0 {
+		return
+	}
+	for _, ifaceInfo := range interfaces {
+		if !ifaceInfo.typeName.Exported() {
+			continue
+		}
+		appearsInOutput, found := contractual[ifaceInfo.typeName]
+		if !found || !appearsInOutput {
+			continue
+		}
+
+		ownerPkg := ifaceInfo.typeName.Pkg()
+		if ownerPkg == nil {
+			continue
+		}
+		fullName := ownerPkg.Path() + "." + ifaceInfo.typeName.Name()
+		if _, exists := seen[fullName]; exists {
+			continue
+		}
+		if isTypeExcluded(exclude, fullName) {
+			continue
+		}
+		if isOwnershipInterfaceIgnored(ownership, fullName, ifaceInfo.named) {
+			continue
+		}
+		if isFileExcluded(pass.Fset, ifaceInfo.pos, exclude) {
+			continue
+		}
+
+		seen[fullName] = struct{}{}
+		*result = append(*result, &interfaceRefInfo{
+			typeName: ifaceInfo.typeName,
+			named:    ifaceInfo.named,
+			iface:    ifaceInfo.iface,
+			fullName: fullName,
+		})
+	}
+}
+
+func interfaceIsRelevantForImpl(
+	pass *analysis.Pass,
+	ifacePkgPath string,
+	coImports map[string]map[string]struct{},
+) bool {
+	if pass == nil || pass.Pkg == nil || ifacePkgPath == "" {
+		return false
+	}
+	if importsPackage(pass.Pkg, ifacePkgPath) {
+		return true
+	}
+	implPath := pass.Pkg.Path()
+	if implPath == "" {
+		return false
+	}
+	if coImports == nil {
+		return false
+	}
+	ifaceSet, ok := coImports[implPath]
+	if !ok {
+		return false
+	}
+	_, ok = ifaceSet[ifacePkgPath]
+	return ok
+}
+
+func importsPackage(pkg *types.Package, path string) bool {
+	if pkg == nil || path == "" {
+		return false
+	}
+	for _, imported := range pkg.Imports() {
+		if imported != nil && imported.Path() == path {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *analyzerState) checkAssertionsRequireAssertions(
+	pass *analysis.Pass,
+	ownership config.CompiledOwnershipConfig,
+	assertionsCfg config.CompiledAssertionsConfig,
+	exclude config.CompiledExcludeConfig,
+	assertionInfos []assertionInfo,
+) error {
+	if ownership.ContractScope == nil {
+		return nil
 	}
 
 	implTypes := filterImplementationTypesForRequireAssertions(pass, exclude)
 	if len(implTypes) == 0 {
-		return
+		return nil
 	}
 
 	candidateIfaces := collectReferencedInterfaces(pass, exclude)
+	globalIfaces, globalCoImports, err := a.loadGlobalState(pass, ownership, exclude)
+	if err != nil {
+		return err
+	}
+	for _, ifaceInfo := range globalIfaces {
+		ifacePkg := ifaceInfo.typeName.Pkg()
+		if ifacePkg == nil {
+			continue
+		}
+		if ifacePkg.Path() == pass.Pkg.Path() {
+			continue
+		}
+		if _, exists := candidateIfaces[ifaceInfo.fullName]; exists {
+			continue
+		}
+		candidateIfaces[ifaceInfo.fullName] = ifaceInfo
+	}
 	if len(candidateIfaces) == 0 {
-		return
+		return nil
 	}
 
 	for _, ifaceInfo := range candidateIfaces {
 		if a.shouldSkipRequireAssertionsInterface(ownership, ifaceInfo) {
 			continue
 		}
+		ifacePkg := ifaceInfo.typeName.Pkg()
+		if ifacePkg == nil {
+			continue
+		}
+		if !assertionsCfg.RequireAssertionsStrict {
+			if !interfaceIsRelevantForImpl(pass, ifacePkg.Path(), globalCoImports) {
+				continue
+			}
+		}
 		for _, implType := range implTypes {
 			reportMissingAssertionIfNeeded(pass, ifaceInfo, implType, assertionInfos)
 		}
 	}
+
+	return nil
 }
 
 func filterImplementationTypesForRequireAssertions(
@@ -475,6 +834,7 @@ func filterImplementationTypesForRequireAssertions(
 	}
 
 	filtered := make([]*implTypeInfo, 0, len(implTypes))
+	seen := make(map[string]struct{}, len(implTypes))
 	for _, implType := range implTypes {
 		if isFileExcluded(pass.Fset, implType.pos, exclude) {
 			continue
@@ -492,6 +852,10 @@ func filterImplementationTypesForRequireAssertions(
 		if isTypeExcluded(exclude, implFullName) {
 			continue
 		}
+		if _, exists := seen[implFullName]; exists {
+			continue
+		}
+		seen[implFullName] = struct{}{}
 
 		filtered = append(filtered, implType)
 	}
@@ -515,24 +879,24 @@ func reportMissingAssertionIfNeeded(
 	implType *implTypeInfo,
 	assertions []assertionInfo,
 ) {
-	if !typeutil.ImplementsEither(implType.named, ifaceInfo.iface) {
+	if !implementsInterfaceForRequireAssertions(implType.named, ifaceInfo.iface) {
 		return
 	}
 	if hasSatisfyingAssertion(implType.named, ifaceInfo, assertions) {
 		return
 	}
 
-	implPkg := implType.named.Obj().Pkg()
-	ifacePkg := ifaceInfo.typeName.Pkg()
-	if implPkg == nil || ifacePkg == nil {
+	implObj := implType.named.Obj()
+	ifaceObj := ifaceInfo.typeName
+	if implObj.Pkg() == nil || ifaceObj.Pkg() == nil {
 		return
 	}
 
 	msg := fmt.Sprintf(
-		"%s: missing compile-time assertion for type %s.%s implementing interface %s.%s.",
+		"%s: missing compile-time assertion for type %s implementing interface %s.",
 		assertionsMissID,
-		implPkg.Path(), implType.named.Obj().Name(),
-		ifacePkg.Path(), ifaceInfo.typeName.Name(),
+		implObj.Name(),
+		ifaceObj.Name(),
 	)
 	reportDiagnostic(pass, implType.pos, assertionsMissID, msg)
 }
@@ -584,12 +948,193 @@ func assertionSatisfiesInterface(lhsType types.Type, ifaceInfo *interfaceRefInfo
 		if owner == nil {
 			return false
 		}
-		return owner == ifaceInfo.typeName
+		ownerPkg := owner.Pkg()
+		if ownerPkg == nil {
+			return false
+		}
+		return ownerPkg.Path()+"."+owner.Name() == ifaceInfo.fullName
 	case *types.Interface:
-		return types.Identical(t, ifaceInfo.iface)
+		return interfacesEquivalent(t, ifaceInfo.iface)
 	default:
 		return false
 	}
+}
+
+func implementsInterfaceForRequireAssertions(implType *types.Named, iface *types.Interface) bool {
+	if implType == nil || iface == nil {
+		return false
+	}
+	implObj := implType.Obj()
+	if implObj == nil || implObj.Pkg() == nil {
+		return false
+	}
+	ifaceMethods, ok := interfaceMethodSignaturesForImpl(iface, implObj.Pkg().Path())
+	if !ok {
+		return false
+	}
+
+	if methodSetSatisfiesInterface(types.NewMethodSet(implType), ifaceMethods) {
+		return true
+	}
+	return methodSetSatisfiesInterface(types.NewMethodSet(types.NewPointer(implType)), ifaceMethods)
+}
+
+func interfaceMethodSignaturesForImpl(
+	iface *types.Interface,
+	implPkgPath string,
+) (map[string]string, bool) {
+	if iface == nil {
+		return nil, false
+	}
+	iface = iface.Complete()
+	result := make(map[string]string, iface.NumMethods())
+	for i := range iface.NumMethods() {
+		method := iface.Method(i)
+		if method == nil {
+			continue
+		}
+		if !method.Exported() {
+			pkg := method.Pkg()
+			if pkg == nil || pkg.Path() != implPkgPath {
+				return nil, false
+			}
+		}
+		sig, ok := method.Type().(*types.Signature)
+		if !ok {
+			continue
+		}
+		result[methodKey(method)] = signatureString(stripReceiver(sig))
+	}
+	return result, true
+}
+
+func methodSetSatisfiesInterface(
+	methodSet *types.MethodSet,
+	ifaceMethods map[string]string,
+) bool {
+	if methodSet == nil {
+		return false
+	}
+	implMethods := methodSetSignatures(methodSet)
+	if len(implMethods) < len(ifaceMethods) {
+		return false
+	}
+	for key, ifaceSig := range ifaceMethods {
+		implSig, ok := implMethods[key]
+		if !ok || implSig != ifaceSig {
+			return false
+		}
+	}
+	return true
+}
+
+func methodSetSignatures(methodSet *types.MethodSet) map[string]string {
+	result := make(map[string]string, methodSet.Len())
+	for i := range methodSet.Len() {
+		selection := methodSet.At(i)
+		fn, ok := selection.Obj().(*types.Func)
+		if !ok {
+			continue
+		}
+		sig, ok := fn.Type().(*types.Signature)
+		if !ok {
+			continue
+		}
+		key := methodKey(fn)
+		if key == "" {
+			continue
+		}
+		result[key] = signatureString(stripReceiver(sig))
+	}
+	return result
+}
+
+func interfacesEquivalent(left *types.Interface, right *types.Interface) bool {
+	if left == nil || right == nil {
+		return false
+	}
+	leftMap := interfaceSignatureMap(left)
+	rightMap := interfaceSignatureMap(right)
+	if len(leftMap) != len(rightMap) {
+		return false
+	}
+	for key, leftSig := range leftMap {
+		if rightSig, ok := rightMap[key]; !ok || rightSig != leftSig {
+			return false
+		}
+	}
+	return true
+}
+
+func interfaceSignatureMap(iface *types.Interface) map[string]string {
+	if iface == nil {
+		return nil
+	}
+	iface = iface.Complete()
+	result := make(map[string]string, iface.NumMethods())
+	for i := range iface.NumMethods() {
+		method := iface.Method(i)
+		if method == nil {
+			continue
+		}
+		sig, ok := method.Type().(*types.Signature)
+		if !ok {
+			continue
+		}
+		result[methodKey(method)] = signatureString(stripReceiver(sig))
+	}
+	return result
+}
+
+func methodKey(fn *types.Func) string {
+	if fn == nil {
+		return ""
+	}
+	if fn.Exported() {
+		return fn.Name()
+	}
+	pkg := fn.Pkg()
+	if pkg == nil {
+		return ""
+	}
+	return pkg.Path() + "." + fn.Name()
+}
+
+func signatureString(sig *types.Signature) string {
+	if sig == nil {
+		return ""
+	}
+	return types.TypeString(sig, func(pkg *types.Package) string {
+		if pkg == nil {
+			return ""
+		}
+		return pkg.Path()
+	})
+}
+
+func stripReceiver(sig *types.Signature) *types.Signature {
+	if sig == nil || sig.Recv() == nil {
+		return sig
+	}
+	return types.NewSignatureType(
+		nil,
+		nil,
+		typeParamListToSlice(sig.TypeParams()),
+		sig.Params(),
+		sig.Results(),
+		sig.Variadic(),
+	)
+}
+
+func typeParamListToSlice(list *types.TypeParamList) []*types.TypeParam {
+	if list == nil || list.Len() == 0 {
+		return nil
+	}
+	result := make([]*types.TypeParam, list.Len())
+	for i := range list.Len() {
+		result[i] = list.At(i)
+	}
+	return result
 }
 
 func isOwnershipInterfaceIgnored(cfg config.CompiledOwnershipConfig, fullName string, named *types.Named) bool {
@@ -740,16 +1285,15 @@ func reportDiagnostic(
 func reportOwnershipViolation(
 	pass *analysis.Pass,
 	pos token.Pos,
-	fullName string,
-	pkgPath string,
+	ifaceName string,
 	implTypeName string,
 ) {
 	msg := fmt.Sprintf(
-		"%s: interface %s has implementation %s.%s in same package; "+
+		"%s: interface %s has implementation %s in same package; "+
 			"move interface to consumer package or dedicated contract package",
 		ownershipID,
-		fullName,
-		pkgPath, implTypeName,
+		ifaceName,
+		implTypeName,
 	)
 	reportDiagnostic(pass, pos, ownershipID, msg)
 }
@@ -818,7 +1362,7 @@ func (a *analyzerState) checkOwnershipExportedOutput(
 		}
 
 		// Report violation.
-		reportOwnershipViolation(pass, ifaceInfo.pos, fullName, pkgPath, implementer.Obj().Name())
+		reportOwnershipViolation(pass, ifaceInfo.pos, ifaceInfo.typeName.Name(), implementer.Obj().Name())
 	}
 }
 
@@ -868,7 +1412,7 @@ func (a *analyzerState) checkOwnershipAnyExported(
 		}
 
 		// Report violation.
-		reportOwnershipViolation(pass, ifaceInfo.pos, fullName, pkgPath, implementer.Obj().Name())
+		reportOwnershipViolation(pass, ifaceInfo.pos, ifaceInfo.typeName.Name(), implementer.Obj().Name())
 	}
 }
 
