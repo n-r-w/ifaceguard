@@ -398,6 +398,42 @@ If `requireassertions=false`, no `IFG003-ASSERTION-MISSING` is reported.
 
 When `requireassertions=true`, ifaceguard reports IFG003 unless each implementation of a contractual external interface has at least one compile-time assertion in the implementation package. The goal is to make conformance explicit and prevent silent drift.
 
+#### Assertions: `requireassertionsstrict`
+
+Code:
+
+```go
+// contract/runner.go
+package contract
+
+type Runner interface {
+	Run() error
+}
+```
+
+```go
+// provider/service.go
+package provider
+
+type Service struct{}
+
+func (Service) Run() error { return nil }
+
+// No import of contract and no compile-time assertion.
+```
+
+Config and expected diagnostics:
+
+```yaml
+assertions:
+  requireassertions: true
+  requireassertionsstrict: true
+```
+
+- Expected: `IFG003-ASSERTION-MISSING` on `provider.Service`, even when there is no import/co-import evidence between packages.
+
+With `requireassertionsstrict=false`, ifaceguard keeps the relevance filter and may suppress IFG003 when there is no import/co-import evidence linking the implementation to the contractual interface.
+
 #### Assertions: `acceptconversiononlyform`
 
 Code:
