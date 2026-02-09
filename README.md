@@ -9,6 +9,19 @@ A Go linter that checks architectural properties of interface usage.
 - **Dependency Inversion Principle (DIP):** Interface contracts should belong to the consumer side (or a dedicated contract package), not the implementation side.
 - **Explicit compile-time assertions:** Implementation packages must declare compile-time assertions verifying interface compliance.
 
+```mermaid
+flowchart LR
+  Consumer[Consumer / Contract]
+  Interface[Interface]
+  Impl[Implementation]
+  Assertion[Compile-time assertion]
+
+  Consumer -->|declares| Interface
+  Consumer -->|depends on| Interface
+  Impl -->|implements| Interface
+  Impl -->|declares| Assertion
+```
+
 ## How the two checks differ
 
 `ifaceguard` runs two independent checks that target different problems:
