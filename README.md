@@ -23,7 +23,7 @@ These checks can be enabled or disabled independently via `ownership.enabled` an
 
 ## Project Status
 
-`ifaceguard` is in early development. The core analysis logic is implemented and tested, but the configuration and CLI are still evolving. Breaking changes to config keys and behavior are expected until the first stable release.
+⚠️ `ifaceguard` is in early development. The core analysis logic is implemented and tested, but the configuration and CLI are still evolving. Breaking changes to config keys and behavior are expected until the first stable release.
 
 ## Installation
 
@@ -50,6 +50,8 @@ On macOS, if the system blocks the binary, open System Settings > Privacy & Secu
 ```bash
 ifaceguard [flags] [packages]
 ```
+
+`packages` is an optional list of Go package patterns (same syntax as `go list`, e.g. `./...`, `./internal/...`).
 
 Standalone runs accept an optional config file:
 
