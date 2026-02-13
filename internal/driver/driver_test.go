@@ -1,9 +1,11 @@
 package driver
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/n-r-w/ifaceguard/internal/analyzer"
@@ -59,4 +61,42 @@ func TestNewFlagSet_ConfigFlagName(t *testing.T) {
 
 	assert.NotNil(t, fs.Lookup("config"))
 	assert.Nil(t, fs.Lookup("c"))
+}
+
+func TestRun_FailFastOnPackageErrors(t *testing.T) {
+	tempDir := t.TempDir()
+
+	goModPath := filepath.Join(tempDir, "go.mod")
+	goMod := `module example.com/broken
+
+go 1.25
+`
+	require.NoError(t, os.WriteFile(goModPath, []byte(goMod), 0o600))
+
+	sourcePath := filepath.Join(tempDir, "broken.go")
+	source := `package broken
+
+func f() {
+	_ = missingSymbol
+}
+`
+	require.NoError(t, os.WriteFile(sourcePath, []byte(source), 0o600))
+
+	t.Chdir(tempDir)
+
+	a, err := analyzer.New(config.Default())
+	require.NoError(t, err)
+
+	var stderr bytes.Buffer
+	exitCode := Run(a, Options{
+		Args:   []string{"./..."},
+		Stdout: io.Discard,
+		Stderr: &stderr,
+	})
+
+	assert.Equal(t, 1, exitCode)
+
+	output := stderr.String()
+	assert.Equal(t, 1, strings.Count(output, "undefined: missingSymbol"))
+	assert.NotContains(t, output, "analysis skipped due to errors in package")
 }

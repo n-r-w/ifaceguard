@@ -37,6 +37,11 @@ type driverFlags struct {
 	version      bool
 }
 
+type packageError struct {
+	pos string
+	msg string
+}
+
 // Run executes a single analyzer using a standalone driver.
 // It returns the exit code that should be used by the caller.
 func Run(a *analysis.Analyzer, opts Options) int {
@@ -149,10 +154,13 @@ func runAnalysis(
 		return 1
 	}
 
-	graph, pkgsExitCode, err := analyzePackages([]*analysis.Analyzer{newAnalyzer}, args)
+	graph, pkgsExitCode, err := analyzePackages([]*analysis.Analyzer{newAnalyzer}, args, opts.Stderr)
 	if err != nil {
 		_, _ = fmt.Fprintln(opts.Stderr, err)
 		return 1
+	}
+	if graph == nil {
+		return pkgsExitCode
 	}
 
 	return outputResults(graph, pkgsExitCode, flags, opts)
@@ -161,6 +169,7 @@ func runAnalysis(
 func analyzePackages(
 	analyzers []*analysis.Analyzer,
 	args []string,
+	stderr io.Writer,
 ) (*checker.Graph, int, error) {
 	allSyntax := needFacts(analyzers)
 	initial, err := loadPackages(args, true, allSyntax)
@@ -168,9 +177,8 @@ func analyzePackages(
 		return nil, 0, err
 	}
 
-	pkgsExitCode := 0
-	if n := packages.PrintErrors(initial); n > 0 {
-		pkgsExitCode = 1
+	if n := printPackageErrors(stderr, initial); n > 0 {
+		return nil, 1, nil
 	}
 
 	checkerOpts := &checker.Options{
@@ -184,7 +192,160 @@ func analyzePackages(
 		return nil, 0, err
 	}
 
-	return graph, pkgsExitCode, nil
+	return graph, 0, nil
+}
+
+func printPackageErrors(stderr io.Writer, initial []*packages.Package) int {
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+
+	indices := make(map[string]int)
+	uniqueErrors := make([]packageError, 0)
+
+	for _, pkg := range initial {
+		for _, pkgErr := range pkg.Errors {
+			records := expandPackageError(strings.TrimSpace(pkgErr.Pos), strings.TrimSpace(pkgErr.Msg))
+			for _, record := range records {
+				key := packageErrorKey(record)
+				if idx, ok := indices[key]; ok {
+					if shouldPreferPosition(record.pos, uniqueErrors[idx].pos) {
+						uniqueErrors[idx].pos = record.pos
+					}
+					continue
+				}
+				indices[key] = len(uniqueErrors)
+				uniqueErrors = append(uniqueErrors, record)
+			}
+		}
+	}
+
+	for _, pkgErr := range uniqueErrors {
+		if pkgErr.pos == "" || pkgErr.pos == "-" {
+			_, _ = fmt.Fprintln(stderr, pkgErr.msg)
+			continue
+		}
+		_, _ = fmt.Fprintf(stderr, "%s: %s\n", pkgErr.pos, pkgErr.msg)
+	}
+
+	return len(uniqueErrors)
+}
+
+func packageErrorKey(pkgErr packageError) string {
+	return normalizeErrorPos(pkgErr.pos) + "|" + pkgErr.msg
+}
+
+func normalizeErrorPos(pos string) string {
+	if pos == "" || pos == "-" {
+		return pos
+	}
+
+	pathPart, suffix, ok := splitPosition(pos)
+	if !ok || pathPart == "" || pathPart == "-" {
+		return pos
+	}
+
+	cleanPath := filepath.Clean(pathPart)
+	if !filepath.IsAbs(cleanPath) {
+		absPath, err := filepath.Abs(cleanPath)
+		if err == nil {
+			cleanPath = absPath
+		}
+	}
+	if resolvedPath, err := filepath.EvalSymlinks(cleanPath); err == nil {
+		cleanPath = resolvedPath
+	}
+
+	return cleanPath + suffix
+}
+
+func splitPosition(pos string) (pathPart, suffix string, ok bool) {
+	lineEnd := len(pos) - 1
+	for lineEnd >= 0 && pos[lineEnd] >= '0' && pos[lineEnd] <= '9' {
+		lineEnd--
+	}
+	if lineEnd == len(pos)-1 {
+		return pos, "", false
+	}
+	if lineEnd < 0 || pos[lineEnd] != ':' {
+		return pos, "", false
+	}
+
+	lineStart := lineEnd - 1
+	for lineStart >= 0 && pos[lineStart] >= '0' && pos[lineStart] <= '9' {
+		lineStart--
+	}
+	if lineStart >= 0 && pos[lineStart] == ':' && lineStart != lineEnd-1 {
+		return pos[:lineStart], pos[lineStart:], true
+	}
+
+	return pos[:lineEnd], pos[lineEnd:], true
+}
+
+func shouldPreferPosition(candidate, current string) bool {
+	if candidate == "" {
+		return false
+	}
+	if current == "" {
+		return true
+	}
+	return len(candidate) < len(current)
+}
+
+func expandPackageError(pos, msg string) []packageError {
+	if pos != "" && pos != "-" {
+		return []packageError{{pos: pos, msg: msg}}
+	}
+
+	lines := strings.Split(msg, "\n")
+	records := make([]packageError, 0, len(lines))
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		linePos, lineMsg, ok := splitMessagePosition(line)
+		if ok {
+			records = append(records, packageError{pos: linePos, msg: lineMsg})
+			continue
+		}
+
+		if strings.HasPrefix(line, "# ") {
+			continue
+		}
+
+		records = append(records, packageError{
+			pos: "",
+			msg: line,
+		})
+	}
+
+	if len(records) == 0 && msg != "" {
+		return []packageError{{pos: pos, msg: msg}}
+	}
+
+	return records
+}
+
+func splitMessagePosition(msg string) (prefix, suffix string, ok bool) {
+	separatorIndex := strings.Index(msg, ": ")
+	if separatorIndex <= 0 {
+		return "", "", false
+	}
+
+	prefix = strings.TrimSpace(msg[:separatorIndex])
+	if prefix == "" {
+		return "", "", false
+	}
+
+	_, _, hasPosition := splitPosition(prefix)
+	if !hasPosition {
+		return "", "", false
+	}
+
+	return prefix, strings.TrimSpace(msg[separatorIndex+2:]), true
 }
 
 func outputResults(
