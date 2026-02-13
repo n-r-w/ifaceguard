@@ -1,6 +1,6 @@
 module github.com/n-r-w/ifaceguard
 
-go 1.22.0
+go 1.24.0
 
 require (
 	github.com/golangci/plugin-module-register v0.1.1

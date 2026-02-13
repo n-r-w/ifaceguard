@@ -29,4 +29,4 @@ More details in the `README.md`
 
 1. MUST use English for all code and comments.
 2. MUST execute `task lint` before finalizing.
-3. Go 1.20+
+3. Go 1.24+
