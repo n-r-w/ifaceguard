@@ -64,6 +64,7 @@ func TestNewFlagSet_ConfigFlagName(t *testing.T) {
 }
 
 func TestRun_FailFastOnPackageErrors(t *testing.T) {
+	// Do not use t.Parallel here: t.Chdir changes process-wide working directory.
 	tempDir := t.TempDir()
 
 	goModPath := filepath.Join(tempDir, "go.mod")
@@ -102,6 +103,7 @@ func f() {
 }
 
 func TestRun_PrintNoErrorsMessage(t *testing.T) {
+	// Do not use t.Parallel here: t.Chdir changes process-wide working directory.
 	tempDir := t.TempDir()
 
 	goModPath := filepath.Join(tempDir, "go.mod")
@@ -140,6 +142,7 @@ func Value() int {
 }
 
 func TestRun_JSONOutputDoesNotPrintNoErrorsMessage(t *testing.T) {
+	// Do not use t.Parallel here: t.Chdir changes process-wide working directory.
 	tempDir := t.TempDir()
 
 	goModPath := filepath.Join(tempDir, "go.mod")
