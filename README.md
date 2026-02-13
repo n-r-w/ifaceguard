@@ -530,7 +530,7 @@ exclude:
 
 ## Requirements
 
-- Go 1.22+
+- Go 1.24+
 - https://taskfile.dev/
 - https://golangci-lint.run/
 
