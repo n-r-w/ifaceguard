@@ -21,6 +21,7 @@ import (
 const (
 	defaultContextLines      = -1
 	diagnosticsExitCodeValue = 3
+	noErrorsFoundMessage     = "ifaceguard: no errors found"
 )
 
 // Options controls execution of the standalone driver.
@@ -371,6 +372,11 @@ func outputResults(
 	if diagExitCode != 0 {
 		return diagExitCode
 	}
+
+	if pkgsExitCode == 0 {
+		_, _ = fmt.Fprintln(opts.Stdout, noErrorsFoundMessage)
+	}
+
 	return pkgsExitCode
 }
 
