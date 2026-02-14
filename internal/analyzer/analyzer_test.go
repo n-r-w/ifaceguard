@@ -553,6 +553,83 @@ func TestAssertions_RequireAssertions_Strict_Enabled_NoCoImport(t *testing.T) {
 	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_strict/impl")
 }
 
+func TestAssertions_RequireAssertions_BypassUnnamedInterface(t *testing.T) {
+	t.Parallel()
+
+	testdataDir := moduleTestdataDir(t)
+	cfg := config.Default()
+	cfg.Assertions.RequireAssertions = true
+	scope := config.ContractScopeAnyExported
+	cfg.Ownership.ContractScope = &scope
+
+	a, err := analyzer.New(cfg)
+	require.NoError(t, err)
+
+	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_bypass_unnamed/impl")
+}
+
+func TestAssertions_RequireAssertions_BypassPrivateInterfaceOnlyAssertion(t *testing.T) {
+	t.Parallel()
+
+	testdataDir := moduleTestdataDir(t)
+	cfg := config.Default()
+	cfg.Assertions.RequireAssertions = true
+	scope := config.ContractScopeAnyExported
+	cfg.Ownership.ContractScope = &scope
+
+	a, err := analyzer.New(cfg)
+	require.NoError(t, err)
+
+	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_bypass_private/impl")
+}
+
+func TestAssertions_RequireAssertions_BypassChecksDisabled(t *testing.T) {
+	t.Parallel()
+
+	testdataDir := moduleTestdataDir(t)
+	cfg := config.Default()
+	cfg.Assertions.RequireAssertions = true
+	cfg.Assertions.CheckBypassAssertions = false
+	scope := config.ContractScopeAnyExported
+	cfg.Ownership.ContractScope = &scope
+
+	a, err := analyzer.New(cfg)
+	require.NoError(t, err)
+
+	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_bypass_private_nodiag/impl")
+}
+
+func TestAssertions_RequireAssertions_BypassUnnamedChecksDisabled(t *testing.T) {
+	t.Parallel()
+
+	testdataDir := moduleTestdataDir(t)
+	cfg := config.Default()
+	cfg.Assertions.RequireAssertions = true
+	cfg.Assertions.CheckBypassAssertions = false
+	scope := config.ContractScopeAnyExported
+	cfg.Ownership.ContractScope = &scope
+
+	a, err := analyzer.New(cfg)
+	require.NoError(t, err)
+
+	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_bypass_unnamed_nodiag/impl")
+}
+
+func TestAssertions_RequireAssertions_PrivateInterfaceNotOnlyAssertion_NoBypassDiag(t *testing.T) {
+	t.Parallel()
+
+	testdataDir := moduleTestdataDir(t)
+	cfg := config.Default()
+	cfg.Assertions.RequireAssertions = true
+	scope := config.ContractScopeAnyExported
+	cfg.Ownership.ContractScope = &scope
+
+	a, err := analyzer.New(cfg)
+	require.NoError(t, err)
+
+	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_private_reused/impl")
+}
+
 // =============================================================================
 // Ownership Tests (exportedoutput mode)
 // =============================================================================

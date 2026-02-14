@@ -118,6 +118,10 @@ func parseAssertionsSettings(assertions *AssertionsConfig, m map[string]any) err
 		assertions.RequireAssertionsStrict = v
 	}
 
+	if v, ok := getBool(section, "checkbypassassertions"); ok {
+		assertions.CheckBypassAssertions = v
+	}
+
 	return nil
 }
 
@@ -185,6 +189,7 @@ func allowedAssertionsKeys() []string {
 		"scanfunctionbodies",
 		"requireassertions",
 		"requireassertionsstrict",
+		"checkbypassassertions",
 	}
 }
 

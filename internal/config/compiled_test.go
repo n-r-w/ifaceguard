@@ -27,6 +27,7 @@ func TestCompile_Success(t *testing.T) {
 			ScanFunctionBodies:       false,
 			RequireAssertions:        false,
 			RequireAssertionsStrict:  false,
+			CheckBypassAssertions:    true,
 		},
 		Exclude: config.ExcludeConfig{
 			Files: []string{".*_mock\\.go$"},
