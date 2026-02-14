@@ -1523,8 +1523,8 @@ func signatureWithoutNames(sig *types.Signature) *types.Signature {
 	}
 
 	return types.NewSignatureType(
-		nil,
-		nil,
+		sig.Recv(),
+		typeParamListToSlice(sig.RecvTypeParams()),
 		typeParamListToSlice(sig.TypeParams()),
 		tupleWithoutVarNames(sig.Params()),
 		tupleWithoutVarNames(sig.Results()),
