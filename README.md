@@ -29,8 +29,8 @@ flowchart LR
 - **Ownership check (IFG001-OWNERSHIP):** answers the question “*Is the interface declared in the right package?*”.
   It reports when a **contractual** interface (as defined by `ownership.contractscope`) is declared in the same package that also declares a type implementing it, unless the package is explicitly allowed (for example, `ownership.contractpackages`).
 
-- **Assertions check (IFG002-ASSERTION-PLACEMENT / IFG003-ASSERTION-MISSING):** answers the question “*Is the compile-time assertion placed (or present) in the right package?*”.
-  It reports an assertion placed outside the implementation package, and optionally reports a missing assertion when `assertions.requireassertions=true`.
+- **Assertions check (IFG002-ASSERTION-PLACEMENT / IFG003-ASSERTION-MISSING / IFG004-ASSERTION-BYPASS):** answers the question “*Is the compile-time assertion placed (or present) in the right package?*”.
+  It reports an assertion placed outside the implementation package, optionally reports a missing assertion when `assertions.requireassertions=true`, and reports bypass forms (anonymous interface or private interface used only for assertion) when `requireassertions=true` and `checkbypassassertions=true`.
 
 These checks can be enabled or disabled independently via `ownership.enabled` and `assertions.enabled`.
 
@@ -90,6 +90,7 @@ assertions:
   enabled: true
   wiringpackages: []
   acceptconversiononlyform: false
+  checkbypassassertions: true
   scanfunctionbodies: false
   requireassertions: false
   requireassertionsstrict: false
@@ -161,6 +162,7 @@ settings:
           wiringpackages:
             - "^example\\.com/project/(cmd|internal/compose)(/|$)"
           acceptconversiononlyform: false
+          checkbypassassertions: true
           scanfunctionbodies: false
           requireassertions: false
           requireassertionsstrict: false
@@ -188,11 +190,13 @@ settings:
 
 #### `assertions`
 
-- `enabled` (bool, default: true): toggles assertion checks (IFG002) and missing-assertion checks (IFG003). When false, no assertion diagnostics are reported.
+- `enabled` (bool, default: true): toggles assertion checks (IFG002), missing-assertion checks (IFG003), and bypass checks (IFG004). When false, no assertion diagnostics are reported.
 - `wiringpackages` (list[regex], default: empty): regexes matched against package import paths where assertions are allowed outside the implementation package (e.g., wiring/compose packages).
 - `acceptconversiononlyform` (bool, default: false): if true, also treats `var _ = iface((*T)(nil))` as a valid assertion form (conversion-only form).
+- `checkbypassassertions` (bool, default: true): if true, enables IFG004 bypass detection (`interface{...}` or private assertion-only interface). Effective only when `requireassertions=true`.
 - `scanfunctionbodies` (bool, default: false): if true, scans inside function bodies for `var _ I = ...` assertions. When false, only package-level `var` declarations are scanned.
 - `requireassertions` (bool, default: false): if true, requires at least one recognized assertion in the **implementation package** for each type that implements a contractual interface from another package; reports IFG003 when missing.
+  In this mode, ifaceguard can also report IFG004 when `checkbypassassertions=true`; bypass assertions are not counted for IFG003.
   When enabled, ifaceguard scans all packages in the current module to find contractual interfaces, so missing assertions are reported even if the implementation package does not reference the interface directly.
 - `requireassertionsstrict` (bool, default: false): if true, disables the relevance filter for IFG003 and reports missing assertions for any matching contractual interface in the module, even when no direct import/co-import evidence exists.
 
@@ -212,6 +216,7 @@ The examples below use these diagnostic IDs:
 - `IFG001-OWNERSHIP`: interface ownership violation.
 - `IFG002-ASSERTION-PLACEMENT`: assertion placed outside the implementation package.
 - `IFG003-ASSERTION-MISSING`: missing assertion when `requireassertions=true`.
+- `IFG004-ASSERTION-BYPASS`: bypass assertion form under `requireassertions=true`.
 
 #### Ownership: `contractscope` and `skipifusedasinput`
 

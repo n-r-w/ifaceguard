@@ -25,6 +25,7 @@ const (
 	ownershipID      = "IFG001-OWNERSHIP"
 	assertionsID     = "IFG002-ASSERTION-PLACEMENT"
 	assertionsMissID = "IFG003-ASSERTION-MISSING"
+	assertionsBypass = "IFG004-ASSERTION-BYPASS"
 	minCoImportCount = 2
 )
 
@@ -255,13 +256,28 @@ func (a *analyzerState) checkAssertionSpec(
 			continue
 		}
 
+		currentPkg := pass.Pkg
+		if implPkg.Path() == currentPkg.Path() {
+			if bypassKind, isBypass := assertionBypassKind(pass, cfg, exclude, lhsType); isBypass {
+				msg := fmt.Sprintf(
+					"%s: assertion for type %q uses %s and can bypass explicit contract assertion. "+
+						"Use named external contract form: \"var _ pkg.Interface = (*%s)(nil)\"",
+					assertionsBypass,
+					implType.Obj().Name(),
+					bypassKind,
+					implType.Obj().Name(),
+				)
+				reportDiagnostic(pass, name.Pos(), assertionsBypass, msg)
+				continue
+			}
+		}
+
 		infos = append(infos, assertionInfo{
 			implType: implType,
 			lhsType:  lhsType,
 		})
 
 		// B3: current package must equal implementation package.
-		currentPkg := pass.Pkg
 		if implPkg.Path() == currentPkg.Path() {
 			continue // correct placement, no violation
 		}
@@ -284,6 +300,224 @@ func (a *analyzerState) checkAssertionSpec(
 	}
 
 	return infos
+}
+
+// assertionBypassKind reports whether an assertion LHS represents a bypass pattern
+// that should not satisfy IFG003 when requireassertions is enabled.
+func assertionBypassKind(
+	pass *analysis.Pass,
+	cfg config.CompiledAssertionsConfig,
+	exclude config.CompiledExcludeConfig,
+	lhsType types.Type,
+) (string, bool) {
+	if !cfg.RequireAssertions {
+		return "", false
+	}
+	if !cfg.CheckBypassAssertions {
+		return "", false
+	}
+
+	switch t := lhsType.(type) {
+	case *types.Interface:
+		return "anonymous interface", true
+	case *types.Named:
+		if _, ok := t.Underlying().(*types.Interface); !ok {
+			return "", false
+		}
+
+		typeName := typeutil.UnaliasTypeName(t.Obj())
+		if typeName == nil {
+			return "", false
+		}
+
+		pkg := typeName.Pkg()
+		if pkg == nil || pkg.Path() != pass.Pkg.Path() {
+			return "", false
+		}
+		if typeName.Exported() {
+			return "", false
+		}
+
+		if !isTypeNameUsedOnlyInAssertions(pass, cfg, exclude, typeName) {
+			return "", false
+		}
+
+		return fmt.Sprintf("private interface %q used only in assertion", typeName.Name()), true
+	default:
+		return "", false
+	}
+}
+
+// isTypeNameUsedOnlyInAssertions reports whether all references to typeName are assertion usages.
+func isTypeNameUsedOnlyInAssertions(
+	pass *analysis.Pass,
+	cfg config.CompiledAssertionsConfig,
+	exclude config.CompiledExcludeConfig,
+	typeName *types.TypeName,
+) bool {
+	if pass == nil || pass.TypesInfo == nil || typeName == nil {
+		return false
+	}
+
+	totalUses := 0
+	for ident, obj := range pass.TypesInfo.Uses {
+		if obj == typeName {
+			if isFileExcluded(pass.Fset, ident.Pos(), exclude) {
+				continue
+			}
+			totalUses++
+		}
+	}
+	if totalUses == 0 {
+		return false
+	}
+
+	assertionUses := countTypeNameAssertionUses(pass, cfg, exclude, typeName)
+	return assertionUses > 0 && assertionUses == totalUses
+}
+
+// countTypeNameAssertionUses counts assertion declarations that use typeName as LHS interface.
+func countTypeNameAssertionUses(
+	pass *analysis.Pass,
+	cfg config.CompiledAssertionsConfig,
+	exclude config.CompiledExcludeConfig,
+	typeName *types.TypeName,
+) int {
+	count := 0
+	for _, file := range pass.Files {
+		if file == nil || isFileExcluded(pass.Fset, file.Pos(), exclude) {
+			continue
+		}
+
+		for _, decl := range file.Decls {
+			switch d := decl.(type) {
+			case *ast.GenDecl:
+				count += countTypeNameAssertionUsesInGenDecl(pass, cfg, exclude, d, typeName)
+			case *ast.FuncDecl:
+				if cfg.ScanFunctionBodies && d.Body != nil {
+					count += countTypeNameAssertionUsesInFuncBody(pass, cfg, exclude, d.Body, typeName)
+				}
+			}
+		}
+	}
+
+	return count
+}
+
+// countTypeNameAssertionUsesInGenDecl counts assertion usages from a package-level var declaration.
+func countTypeNameAssertionUsesInGenDecl(
+	pass *analysis.Pass,
+	cfg config.CompiledAssertionsConfig,
+	exclude config.CompiledExcludeConfig,
+	decl *ast.GenDecl,
+	typeName *types.TypeName,
+) int {
+	if decl == nil || decl.Tok != token.VAR {
+		return 0
+	}
+
+	count := 0
+	for _, spec := range decl.Specs {
+		valueSpec, ok := spec.(*ast.ValueSpec)
+		if !ok {
+			continue
+		}
+		if valueSpecUsesTypeNameInAssertion(pass, cfg, exclude, valueSpec, typeName) {
+			count++
+		}
+	}
+
+	return count
+}
+
+// countTypeNameAssertionUsesInFuncBody counts assertion usages from function-body declarations.
+func countTypeNameAssertionUsesInFuncBody(
+	pass *analysis.Pass,
+	cfg config.CompiledAssertionsConfig,
+	exclude config.CompiledExcludeConfig,
+	body *ast.BlockStmt,
+	typeName *types.TypeName,
+) int {
+	count := 0
+	ast.Inspect(body, func(n ast.Node) bool {
+		switch stmt := n.(type) {
+		case *ast.DeclStmt:
+			genDecl, ok := stmt.Decl.(*ast.GenDecl)
+			if !ok {
+				return true
+			}
+			count += countTypeNameAssertionUsesInGenDecl(pass, cfg, exclude, genDecl, typeName)
+		case *ast.AssignStmt:
+			valueSpec := valueSpecFromAssertionAssign(stmt)
+			if valueSpec == nil {
+				return true
+			}
+			if valueSpecUsesTypeNameInAssertion(pass, cfg, exclude, valueSpec, typeName) {
+				count++
+			}
+		}
+		return true
+	})
+
+	return count
+}
+
+// valueSpecUsesTypeNameInAssertion checks whether spec is a valid assertion using typeName as LHS.
+func valueSpecUsesTypeNameInAssertion(
+	pass *analysis.Pass,
+	cfg config.CompiledAssertionsConfig,
+	exclude config.CompiledExcludeConfig,
+	spec *ast.ValueSpec,
+	typeName *types.TypeName,
+) bool {
+	if spec == nil || typeName == nil || !hasBlankIdentifier(spec.Names) {
+		return false
+	}
+
+	var lhsType types.Type
+	if spec.Type != nil {
+		lhsType = pass.TypesInfo.TypeOf(spec.Type)
+	} else if cfg.AcceptConversionOnlyForm {
+		lhsType = extractConversionTargetInterface(pass.TypesInfo, spec)
+	}
+	if lhsType == nil {
+		return false
+	}
+
+	lhsNamed, ok := lhsType.(*types.Named)
+	if !ok {
+		return false
+	}
+	if _, ok := lhsType.Underlying().(*types.Interface); !ok {
+		return false
+	}
+
+	owner := typeutil.UnaliasTypeName(lhsNamed.Obj())
+	if owner == nil || owner != typeName {
+		return false
+	}
+
+	if fullName, ok := fullNamedTypeName(lhsNamed); ok && isTypeExcluded(exclude, fullName) {
+		return false
+	}
+
+	for i, name := range spec.Names {
+		if name.Name != "_" || i >= len(spec.Values) {
+			continue
+		}
+
+		implType := extractImplementationType(pass.TypesInfo, spec.Values[i])
+		if implType == nil {
+			continue
+		}
+		if fullName, ok := fullNamedTypeName(implType); ok && isTypeExcluded(exclude, fullName) {
+			continue
+		}
+
+		return true
+	}
+
+	return false
 }
 
 // hasBlankIdentifier returns true if names contains a blank identifier "_".
@@ -894,7 +1128,7 @@ func reportMissingAssertionIfNeeded(
 
 	msg := fmt.Sprintf(
 		"%s: missing compile-time assertion for type %q implementing interface %q. "+
-			"Use `var _ %s.%s = (*%s)(nil)` in package %q to assert",
+			"Use \"var _ %s.%s = (*%s)(nil)\" in package %q to assert",
 		assertionsMissID,
 		implObj.Name(),
 		ifaceObj.Name(),

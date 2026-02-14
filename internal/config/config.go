@@ -64,6 +64,10 @@ type AssertionsConfig struct {
 	// RequireAssertionsStrict disables relevance filtering for requireassertions.
 	// When true, any matching contractual interface in the module can trigger IFG003.
 	RequireAssertionsStrict bool
+
+	// CheckBypassAssertions enables IFG004 diagnostics for assertion bypass forms
+	// when RequireAssertions is enabled.
+	CheckBypassAssertions bool
 }
 
 // ExcludeConfig contains global exclusion rules applied to all checks.

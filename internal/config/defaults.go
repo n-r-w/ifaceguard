@@ -19,6 +19,7 @@ func Default() Config {
 			ScanFunctionBodies:       false,
 			RequireAssertions:        false,
 			RequireAssertionsStrict:  false,
+			CheckBypassAssertions:    true,
 		},
 		Exclude: ExcludeConfig{
 			Files: nil,

@@ -23,6 +23,7 @@ type CompiledAssertionsConfig struct {
 	ScanFunctionBodies       bool
 	RequireAssertions        bool
 	RequireAssertionsStrict  bool
+	CheckBypassAssertions    bool
 }
 
 // CompiledExcludeConfig contains compiled exclusion patterns.
@@ -97,6 +98,7 @@ func compileAssertions(assertions AssertionsConfig) (CompiledAssertionsConfig, e
 		ScanFunctionBodies:       assertions.ScanFunctionBodies,
 		RequireAssertions:        assertions.RequireAssertions,
 		RequireAssertionsStrict:  assertions.RequireAssertionsStrict,
+		CheckBypassAssertions:    assertions.CheckBypassAssertions,
 	}, nil
 }
 
