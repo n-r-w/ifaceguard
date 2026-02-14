@@ -22,7 +22,7 @@ func Default() Config {
 			CheckBypassAssertions:    true,
 		},
 		Constructors: ConstructorsConfig{
-			Enabled:           false,
+			Enabled:           true,
 			NamePatterns:      []string{"^New[A-Z]", "^MustNew[A-Z]"},
 			ExportedOnly:      true,
 			IgnoreInterfaces:  nil,

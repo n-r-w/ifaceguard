@@ -16,6 +16,6 @@ func (MockExternalAPI) FetchData() (string, error) {
 }
 
 // NewExternalAPI returns ExternalAPI, making it contractual under exportedoutput mode.
-func NewExternalAPI() ExternalAPI {
+func NewExternalAPI() ExternalAPI { // want `IFG005-CONSTRUCTOR-INTERFACE-RETURN`
 	return MockExternalAPI{}
 }

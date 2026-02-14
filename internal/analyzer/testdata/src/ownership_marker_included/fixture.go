@@ -9,6 +9,6 @@ type Marker interface { // want `IFG001-OWNERSHIP: interface "Marker" has implem
 type MarkerImpl struct{}
 
 // NewMarker returns Marker, making it contractual under exportedoutput mode.
-func NewMarker() Marker {
+func NewMarker() Marker { // want `IFG005-CONSTRUCTOR-INTERFACE-RETURN`
 	return MarkerImpl{}
 }

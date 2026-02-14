@@ -11,6 +11,6 @@ type serviceImpl struct{}
 func (serviceImpl) Run() error { return nil }
 
 // NewService returns Service, making it contractual under exportedoutput mode.
-func NewService() Service {
+func NewService() Service { // want `IFG005-CONSTRUCTOR-INTERFACE-RETURN`
 	return serviceImpl{}
 }

@@ -16,6 +16,6 @@ func (Service) Run() error { return nil }
 
 // NewRunner returns a Runner - the interface appears in exported function result.
 // This makes Runner contractual under exportedoutput mode.
-func NewRunner() Runner {
+func NewRunner() Runner { // want `IFG005-CONSTRUCTOR-INTERFACE-RETURN`
 	return Service{}
 }

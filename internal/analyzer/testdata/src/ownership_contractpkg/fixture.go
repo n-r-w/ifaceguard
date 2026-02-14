@@ -11,6 +11,6 @@ type repoImpl struct{}
 func (repoImpl) Save() error { return nil }
 
 // NewRepository returns Repository, making it contractual under exportedoutput mode.
-func NewRepository() Repository {
+func NewRepository() Repository { // want `IFG005-CONSTRUCTOR-INTERFACE-RETURN`
 	return repoImpl{}
 }

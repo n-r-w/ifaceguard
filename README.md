@@ -95,7 +95,7 @@ assertions:
   requireassertions: false
   requireassertionsstrict: false
 constructors:
-  enabled: false
+  enabled: true
   namepatterns:
     - "^New[A-Z]"
     - "^MustNew[A-Z]"
@@ -179,7 +179,7 @@ settings:
           requireassertions: false
           requireassertionsstrict: false
         constructors:
-          enabled: false
+          enabled: true
           namepatterns:
             - "^New[A-Z]"
             - "^MustNew[A-Z]"
@@ -262,7 +262,7 @@ Common pitfall:
 
 #### `constructors`
 
-- `enabled` (bool, default: false): toggles constructor return checks (IFG005). When false, no constructor-return diagnostics are reported.
+- `enabled` (bool, default: true): toggles constructor return checks (IFG005). When false, no constructor-return diagnostics are reported.
 - `namepatterns` (list[regex], default: `["^New[A-Z]", "^MustNew[A-Z]"]`): regexes matched against package-level function names to classify constructor-like functions.
 - `exportedonly` (bool, default: true): when true, only exported constructor-like functions are checked.
 - `ignoreinterfaces` (list[regex], default: empty): regexes matched against full interface names (`pkgpath.Interface`) to exclude from IFG005 checks.
