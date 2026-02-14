@@ -100,7 +100,11 @@ constructors:
     - "^New[A-Z]"
     - "^MustNew[A-Z]"
   exportedonly: true
-  ignoreinterfaces: []
+  ignoreinterfaces:
+    # Matched against full interface name: pkgpath.Interface
+    # Example actual name: github.com/redis/go-redis/v9.UniversalClient
+    # Prefer exact masks to avoid overmatching:
+    - "^github\\.com/redis/go-redis/v9\\.UniversalClient$"
   ignoreerrorreturn: true
 exclude:
   # Regexes applied to full file paths
@@ -181,7 +185,10 @@ settings:
             - "^MustNew[A-Z]"
           exportedonly: true
           ignoreinterfaces:
+            # Matched against full interface name: pkgpath.Interface
             - "^example\\.com/project/contract\\.Allowed$"
+            # go-redis example (exact match):
+            - "^github\\.com/redis/go-redis/v9\\.UniversalClient$"
           ignoreerrorreturn: true
         exclude:
           # Regexes applied to full file paths
@@ -193,6 +200,42 @@ settings:
 ```
 
 ### Configuration options
+
+#### Regex mask guide (applies to all `list[regex]` settings)
+
+`ifaceguard` uses Go regular expressions (RE2 syntax).
+
+Each key matches a different target value:
+
+| Setting | Matched value |
+| --- | --- |
+| `ownership.contractpackages` | package import path |
+| `ownership.ignoreinterfaces` | full interface name: `pkgpath.Interface` |
+| `assertions.wiringpackages` | package import path |
+| `constructors.namepatterns` | package-level function name |
+| `constructors.ignoreinterfaces` | full interface name: `pkgpath.Interface` |
+| `exclude.files` | full file path (with `/`) |
+| `exclude.types` | full type name: `pkgpath.TypeName` |
+
+Practical rules:
+
+- Prefer exact masks with `^...$` to avoid accidental matches.
+- Escape only literal dots with `\\.`.
+- Keep `/` as-is for package and file paths.
+
+Examples:
+
+- Exact interface type:
+  - `^github\\.com/redis/go-redis/v9\\.UniversalClient$`
+- Any interface in a package:
+  - `^github\\.com/redis/go-redis/v9\\..+$`
+- Broad suffix (use carefully):
+  - `.*\\.UniversalClient$`
+
+Common pitfall:
+
+- `.*redis\\.UniversalClient` does **not** match `github.com/redis/go-redis/v9.UniversalClient`
+  because the real full name contains `/go-redis/v9.` before `UniversalClient`.
 
 #### `ownership`
 
