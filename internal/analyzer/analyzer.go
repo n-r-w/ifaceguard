@@ -1516,12 +1516,45 @@ func signatureString(sig *types.Signature) string {
 	if sig == nil {
 		return ""
 	}
-	return types.TypeString(sig, func(pkg *types.Package) string {
+	normalized := signatureWithoutNames(sig)
+	return types.TypeString(normalized, func(pkg *types.Package) string {
 		if pkg == nil {
 			return ""
 		}
 		return pkg.Path()
 	})
+}
+
+func signatureWithoutNames(sig *types.Signature) *types.Signature {
+	if sig == nil {
+		return nil
+	}
+
+	return types.NewSignatureType(
+		nil,
+		nil,
+		typeParamListToSlice(sig.TypeParams()),
+		tupleWithoutVarNames(sig.Params()),
+		tupleWithoutVarNames(sig.Results()),
+		sig.Variadic(),
+	)
+}
+
+func tupleWithoutVarNames(tuple *types.Tuple) *types.Tuple {
+	if tuple == nil {
+		return nil
+	}
+
+	vars := make([]*types.Var, tuple.Len())
+	for i := range tuple.Len() {
+		variable := tuple.At(i)
+		if variable == nil {
+			continue
+		}
+		vars[i] = types.NewVar(variable.Pos(), variable.Pkg(), "", variable.Type())
+	}
+
+	return types.NewTuple(vars...)
 }
 
 func stripReceiver(sig *types.Signature) *types.Signature {
