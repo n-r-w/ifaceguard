@@ -26,6 +26,15 @@ type CompiledAssertionsConfig struct {
 	CheckBypassAssertions    bool
 }
 
+// CompiledConstructorsConfig contains constructors configuration with compiled regexes.
+type CompiledConstructorsConfig struct {
+	Enabled           bool
+	NamePatterns      []*regexp.Regexp
+	ExportedOnly      bool
+	IgnoreInterfaces  []*regexp.Regexp
+	IgnoreErrorReturn bool
+}
+
 // CompiledExcludeConfig contains compiled exclusion patterns.
 type CompiledExcludeConfig struct {
 	Files []*regexp.Regexp
@@ -34,9 +43,10 @@ type CompiledExcludeConfig struct {
 
 // CompiledConfig contains configuration with all regex patterns compiled.
 type CompiledConfig struct {
-	Ownership  CompiledOwnershipConfig
-	Assertions CompiledAssertionsConfig
-	Exclude    CompiledExcludeConfig
+	Ownership    CompiledOwnershipConfig
+	Assertions   CompiledAssertionsConfig
+	Constructors CompiledConstructorsConfig
+	Exclude      CompiledExcludeConfig
 }
 
 // Compile compiles all regex patterns in the config and returns a CompiledConfig.
@@ -52,15 +62,21 @@ func (c Config) Compile() (CompiledConfig, error) {
 		return CompiledConfig{}, fmt.Errorf("assertions: %w", err)
 	}
 
+	compiledConstructors, err := compileConstructors(c.Constructors)
+	if err != nil {
+		return CompiledConfig{}, fmt.Errorf("constructors: %w", err)
+	}
+
 	compiledExclude, err := compileExclude(c.Exclude)
 	if err != nil {
 		return CompiledConfig{}, fmt.Errorf("exclude: %w", err)
 	}
 
 	return CompiledConfig{
-		Ownership:  compiledOwnership,
-		Assertions: compiledAssertions,
-		Exclude:    compiledExclude,
+		Ownership:    compiledOwnership,
+		Assertions:   compiledAssertions,
+		Constructors: compiledConstructors,
+		Exclude:      compiledExclude,
 	}, nil
 }
 
@@ -99,6 +115,26 @@ func compileAssertions(assertions AssertionsConfig) (CompiledAssertionsConfig, e
 		RequireAssertions:        assertions.RequireAssertions,
 		RequireAssertionsStrict:  assertions.RequireAssertionsStrict,
 		CheckBypassAssertions:    assertions.CheckBypassAssertions,
+	}, nil
+}
+
+func compileConstructors(constructors ConstructorsConfig) (CompiledConstructorsConfig, error) {
+	namePatterns, err := compilePatterns(constructors.NamePatterns, "namepatterns")
+	if err != nil {
+		return CompiledConstructorsConfig{}, err
+	}
+
+	ignoreInterfaces, err := compilePatterns(constructors.IgnoreInterfaces, "ignoreinterfaces")
+	if err != nil {
+		return CompiledConstructorsConfig{}, err
+	}
+
+	return CompiledConstructorsConfig{
+		Enabled:           constructors.Enabled,
+		NamePatterns:      namePatterns,
+		ExportedOnly:      constructors.ExportedOnly,
+		IgnoreInterfaces:  ignoreInterfaces,
+		IgnoreErrorReturn: constructors.IgnoreErrorReturn,
 	}, nil
 }
 

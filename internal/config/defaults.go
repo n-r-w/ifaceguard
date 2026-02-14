@@ -21,6 +21,13 @@ func Default() Config {
 			RequireAssertionsStrict:  false,
 			CheckBypassAssertions:    true,
 		},
+		Constructors: ConstructorsConfig{
+			Enabled:           false,
+			NamePatterns:      []string{"^New[A-Z]", "^MustNew[A-Z]"},
+			ExportedOnly:      true,
+			IgnoreInterfaces:  nil,
+			IgnoreErrorReturn: true,
+		},
 		Exclude: ExcludeConfig{
 			Files: nil,
 			Types: nil,

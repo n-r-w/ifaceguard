@@ -17,6 +17,27 @@ func moduleTestdataDir(t *testing.T) string {
 	return filepath.Join(analysistest.TestData(), "src")
 }
 
+// runConstructorsAnalysistest runs analysistest for IFG005 constructor checks.
+func runConstructorsAnalysistest(
+	t *testing.T,
+	packagePattern string,
+	configure func(cfg *config.Config),
+) {
+	t.Helper()
+
+	testdataDir := moduleTestdataDir(t)
+	cfg := config.Default()
+	cfg.Ownership.Enabled = false
+	if configure != nil {
+		configure(&cfg)
+	}
+
+	a, err := analyzer.New(cfg)
+	require.NoError(t, err)
+
+	analysistest.Run(t, testdataDir, a, packagePattern)
+}
+
 func TestNew_DefaultConfig(t *testing.T) {
 	t.Parallel()
 
@@ -41,6 +62,41 @@ func TestAnalysistest_Baseline(t *testing.T) {
 
 	// Run analysistest with baseline package - expects no diagnostics
 	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/baseline")
+}
+
+// =============================================================================
+// Constructors Tests
+// =============================================================================
+
+// TestConstructors_Enabled verifies IFG005 diagnostics for constructor-like
+// functions that return interfaces.
+func TestConstructors_Enabled(t *testing.T) {
+	t.Parallel()
+
+	runConstructorsAnalysistest(t, "ifaceguard-testdata/constructors_enabled", func(cfg *config.Config) {
+		cfg.Constructors.Enabled = true
+	})
+}
+
+// TestConstructors_Disabled verifies IFG005 is silent when disabled.
+func TestConstructors_Disabled(t *testing.T) {
+	t.Parallel()
+
+	runConstructorsAnalysistest(t, "ifaceguard-testdata/constructors_disabled", func(cfg *config.Config) {
+		cfg.Constructors.Enabled = false
+	})
+}
+
+// TestConstructors_IgnoreInterfaces verifies ignoreinterfaces masks suppress IFG005.
+func TestConstructors_IgnoreInterfaces(t *testing.T) {
+	t.Parallel()
+
+	runConstructorsAnalysistest(t, "ifaceguard-testdata/constructors_ignoreinterfaces", func(cfg *config.Config) {
+		cfg.Constructors.Enabled = true
+		cfg.Constructors.IgnoreInterfaces = []string{
+			"^ifaceguard-testdata/constructors_ignoreinterfaces\\.Allowed$",
+		}
+	})
 }
 
 // =============================================================================

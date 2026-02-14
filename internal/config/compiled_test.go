@@ -11,29 +11,14 @@ import (
 func TestCompile_Success(t *testing.T) {
 	t.Parallel()
 
-	cfg := config.Config{
-		Ownership: config.OwnershipConfig{
-			Enabled:                true,
-			ContractScope:          nil,
-			SkipIfUsedAsInput:      true,
-			ContractPackages:       []string{"^example\\.com/.*$", "^internal/.*$"},
-			IgnoreInterfaces:       []string{".*\\.Error$"},
-			IgnoreMarkerInterfaces: true,
-		},
-		Assertions: config.AssertionsConfig{
-			Enabled:                  true,
-			WiringPackages:           []string{"^cmd/.*$"},
-			AcceptConversionOnlyForm: false,
-			ScanFunctionBodies:       false,
-			RequireAssertions:        false,
-			RequireAssertionsStrict:  false,
-			CheckBypassAssertions:    true,
-		},
-		Exclude: config.ExcludeConfig{
-			Files: []string{".*_mock\\.go$"},
-			Types: []string{".*\\.Mock.*$"},
-		},
-	}
+	cfg := config.Default()
+	cfg.Ownership.ContractPackages = []string{"^example\\.com/.*$", "^internal/.*$"}
+	cfg.Ownership.IgnoreInterfaces = []string{".*\\.Error$"}
+	cfg.Assertions.WiringPackages = []string{"^cmd/.*$"}
+	cfg.Constructors.Enabled = true
+	cfg.Constructors.IgnoreInterfaces = []string{".*\\.Allowed$"}
+	cfg.Exclude.Files = []string{".*_mock\\.go$"}
+	cfg.Exclude.Types = []string{".*\\.Mock.*$"}
 
 	compiled, err := cfg.Compile()
 	require.NoError(t, err)
@@ -58,6 +43,14 @@ func TestCompile_Success(t *testing.T) {
 	assert.True(t, compiled.Assertions.Enabled)
 	assert.Len(t, compiled.Assertions.WiringPackages, 1)
 	assert.True(t, compiled.Assertions.WiringPackages[0].MatchString("cmd/main"))
+
+	// Verify constructors config compiled.
+	assert.True(t, compiled.Constructors.Enabled)
+	assert.Len(t, compiled.Constructors.NamePatterns, 2)
+	assert.True(t, compiled.Constructors.NamePatterns[0].MatchString("NewService"))
+	assert.False(t, compiled.Constructors.NamePatterns[0].MatchString("BuildService"))
+	assert.Len(t, compiled.Constructors.IgnoreInterfaces, 1)
+	assert.True(t, compiled.Constructors.IgnoreInterfaces[0].MatchString("foo.Allowed"))
 }
 
 func TestCompile_InvalidOwnershipContractPackages(t *testing.T) {
@@ -124,6 +117,19 @@ func TestCompile_InvalidAssertionsWiringPackages(t *testing.T) {
 	assert.Contains(t, err.Error(), "wiringpackages[0]")
 }
 
+func TestCompile_InvalidConstructorsNamePatterns(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Default()
+	cfg.Constructors.NamePatterns = []string{"[invalid"}
+
+	_, err := cfg.Compile()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "constructors")
+	assert.Contains(t, err.Error(), "namepatterns[0]")
+	assert.Contains(t, err.Error(), "[invalid")
+}
+
 func TestCompile_EmptyPatterns(t *testing.T) {
 	t.Parallel()
 
@@ -131,10 +137,14 @@ func TestCompile_EmptyPatterns(t *testing.T) {
 	compiled, err := cfg.Compile()
 	require.NoError(t, err)
 
-	// Empty slices should compile to nil.
+	// Empty slices should compile to nil, except constructor namepatterns
+	// which come from defaults.
 	assert.Nil(t, compiled.Ownership.ContractPackages)
 	assert.Nil(t, compiled.Ownership.IgnoreInterfaces)
 	assert.Nil(t, compiled.Assertions.WiringPackages)
+	assert.NotNil(t, compiled.Constructors.NamePatterns)
+	assert.Len(t, compiled.Constructors.NamePatterns, 2)
+	assert.Nil(t, compiled.Constructors.IgnoreInterfaces)
 	assert.Nil(t, compiled.Exclude.Files)
 	assert.Nil(t, compiled.Exclude.Types)
 }

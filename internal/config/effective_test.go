@@ -47,29 +47,26 @@ func TestResolveEffective_ExplicitScope_Honored(t *testing.T) {
 func TestResolveEffective_OtherFieldsCopied(t *testing.T) {
 	t.Parallel()
 
-	cfg := config.Config{
-		Ownership: config.OwnershipConfig{
-			Enabled:                false,
-			ContractScope:          nil,
-			SkipIfUsedAsInput:      false,
-			ContractPackages:       []string{"pkg1", "pkg2"},
-			IgnoreInterfaces:       []string{"iface1"},
-			IgnoreMarkerInterfaces: false,
-		},
-		Assertions: config.AssertionsConfig{
-			Enabled:                  false,
-			WiringPackages:           []string{"wiring"},
-			AcceptConversionOnlyForm: true,
-			ScanFunctionBodies:       true,
-			RequireAssertions:        true,
-			RequireAssertionsStrict:  true,
-			CheckBypassAssertions:    true,
-		},
-		Exclude: config.ExcludeConfig{
-			Files: []string{".*_mock\\.go$"},
-			Types: []string{".*\\.Mock.*$"},
-		},
-	}
+	cfg := config.Default()
+	cfg.Ownership.Enabled = false
+	cfg.Ownership.SkipIfUsedAsInput = false
+	cfg.Ownership.ContractPackages = []string{"pkg1", "pkg2"}
+	cfg.Ownership.IgnoreInterfaces = []string{"iface1"}
+	cfg.Ownership.IgnoreMarkerInterfaces = false
+	cfg.Assertions.Enabled = false
+	cfg.Assertions.WiringPackages = []string{"wiring"}
+	cfg.Assertions.AcceptConversionOnlyForm = true
+	cfg.Assertions.ScanFunctionBodies = true
+	cfg.Assertions.RequireAssertions = true
+	cfg.Assertions.RequireAssertionsStrict = true
+	cfg.Assertions.CheckBypassAssertions = true
+	cfg.Constructors.Enabled = true
+	cfg.Constructors.NamePatterns = []string{"^Factory[A-Z]"}
+	cfg.Constructors.ExportedOnly = false
+	cfg.Constructors.IgnoreInterfaces = []string{"ifaceguard-testdata/pkg.Iface"}
+	cfg.Constructors.IgnoreErrorReturn = false
+	cfg.Exclude.Files = []string{".*_mock\\.go$"}
+	cfg.Exclude.Types = []string{".*\\.Mock.*$"}
 
 	effective := cfg.ResolveEffective()
 
@@ -82,6 +79,9 @@ func TestResolveEffective_OtherFieldsCopied(t *testing.T) {
 
 	// Verify assertions config is copied as-is.
 	assert.Equal(t, cfg.Assertions, effective.Assertions)
+
+	// Verify constructors config is copied as-is.
+	assert.Equal(t, cfg.Constructors, effective.Constructors)
 
 	// Verify Exclude is copied as-is.
 	assert.Equal(t, cfg.Exclude, effective.Exclude)
@@ -106,29 +106,17 @@ func TestEffectiveConfig_Compile_ScopeResolved(t *testing.T) {
 func TestEffectiveConfig_Compile_RegexPatterns(t *testing.T) {
 	t.Parallel()
 
-	cfg := config.Config{
-		Ownership: config.OwnershipConfig{
-			Enabled:                true,
-			ContractScope:          nil,
-			SkipIfUsedAsInput:      false,
-			ContractPackages:       []string{`^pkg/contract$`},
-			IgnoreInterfaces:       []string{`\.Internal$`},
-			IgnoreMarkerInterfaces: false,
-		},
-		Assertions: config.AssertionsConfig{
-			Enabled:                  true,
-			WiringPackages:           []string{`^pkg/wiring$`},
-			AcceptConversionOnlyForm: false,
-			ScanFunctionBodies:       false,
-			RequireAssertions:        false,
-			RequireAssertionsStrict:  false,
-			CheckBypassAssertions:    true,
-		},
-		Exclude: config.ExcludeConfig{
-			Files: []string{`.*_mock\.go$`},
-			Types: []string{`\.Mock.*$`},
-		},
-	}
+	cfg := config.Default()
+	cfg.Ownership.SkipIfUsedAsInput = false
+	cfg.Ownership.ContractPackages = []string{`^pkg/contract$`}
+	cfg.Ownership.IgnoreInterfaces = []string{`\.Internal$`}
+	cfg.Ownership.IgnoreMarkerInterfaces = false
+	cfg.Assertions.WiringPackages = []string{`^pkg/wiring$`}
+	cfg.Constructors.Enabled = true
+	cfg.Constructors.NamePatterns = []string{`^New[A-Z]`}
+	cfg.Constructors.IgnoreInterfaces = []string{`\.Allowed$`}
+	cfg.Exclude.Files = []string{`.*_mock\.go$`}
+	cfg.Exclude.Types = []string{`\.Mock.*$`}
 
 	effective := cfg.ResolveEffective()
 	compiled, err := effective.Compile()
@@ -138,6 +126,8 @@ func TestEffectiveConfig_Compile_RegexPatterns(t *testing.T) {
 	assert.Len(t, compiled.Ownership.ContractPackages, 1)
 	assert.Len(t, compiled.Ownership.IgnoreInterfaces, 1)
 	assert.Len(t, compiled.Assertions.WiringPackages, 1)
+	assert.Len(t, compiled.Constructors.NamePatterns, 1)
+	assert.Len(t, compiled.Constructors.IgnoreInterfaces, 1)
 	assert.Len(t, compiled.Exclude.Files, 1)
 	assert.Len(t, compiled.Exclude.Types, 1)
 
@@ -147,6 +137,9 @@ func TestEffectiveConfig_Compile_RegexPatterns(t *testing.T) {
 
 	assert.True(t, compiled.Ownership.IgnoreInterfaces[0].MatchString("pkg.Internal"))
 	assert.False(t, compiled.Ownership.IgnoreInterfaces[0].MatchString("pkg.Public"))
+	assert.True(t, compiled.Constructors.NamePatterns[0].MatchString("NewService"))
+	assert.False(t, compiled.Constructors.NamePatterns[0].MatchString("BuildService"))
+	assert.True(t, compiled.Constructors.IgnoreInterfaces[0].MatchString("foo.Allowed"))
 	assert.True(t, compiled.Exclude.Files[0].MatchString("adapter/interface_mock.go"))
 	assert.True(t, compiled.Exclude.Types[0].MatchString("pkg.MockService"))
 }
@@ -154,29 +147,12 @@ func TestEffectiveConfig_Compile_RegexPatterns(t *testing.T) {
 func TestEffectiveConfig_Compile_InvalidRegex_ReturnsError(t *testing.T) {
 	t.Parallel()
 
-	cfg := config.Config{
-		Ownership: config.OwnershipConfig{
-			Enabled:                true,
-			ContractScope:          nil,
-			SkipIfUsedAsInput:      false,
-			ContractPackages:       []string{`[invalid`}, // invalid regex
-			IgnoreInterfaces:       nil,
-			IgnoreMarkerInterfaces: false,
-		},
-		Assertions: config.AssertionsConfig{
-			Enabled:                  false,
-			WiringPackages:           nil,
-			AcceptConversionOnlyForm: false,
-			ScanFunctionBodies:       false,
-			RequireAssertions:        false,
-			RequireAssertionsStrict:  false,
-			CheckBypassAssertions:    true,
-		},
-		Exclude: config.ExcludeConfig{
-			Files: nil,
-			Types: nil,
-		},
-	}
+	cfg := config.Default()
+	cfg.Ownership.SkipIfUsedAsInput = false
+	cfg.Ownership.ContractPackages = []string{`[invalid`} // invalid regex
+	cfg.Ownership.IgnoreMarkerInterfaces = false
+	cfg.Assertions.Enabled = false
+	cfg.Constructors.Enabled = false
 
 	effective := cfg.ResolveEffective()
 	_, err := effective.Compile()

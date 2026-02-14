@@ -135,6 +135,7 @@ func TestParseFromAny_UnknownTopLevelKeys(t *testing.T) {
 	assert.Contains(t, err.Error(), "ruleb")
 	assert.Contains(t, err.Error(), "ownership")
 	assert.Contains(t, err.Error(), "assertions")
+	assert.Contains(t, err.Error(), "constructors")
 	assert.Contains(t, err.Error(), "exclude")
 }
 
@@ -219,6 +220,46 @@ func TestParseFromAny_AssertionsSettings(t *testing.T) {
 	assert.False(t, cfg.Assertions.CheckBypassAssertions)
 }
 
+func TestParseFromAny_ConstructorsSettings(t *testing.T) {
+	t.Parallel()
+
+	settings := map[string]any{
+		"constructors": map[string]any{
+			"enabled":           true,
+			"namepatterns":      []string{"^Factory[A-Z]", "^Build[A-Z]"},
+			"exportedonly":      false,
+			"ignoreinterfaces":  []string{"^example\\.com/project/iface\\.Allowed$"},
+			"ignoreerrorreturn": false,
+		},
+	}
+
+	cfg, err := config.ParseFromAny(settings)
+	require.NoError(t, err)
+
+	assert.True(t, cfg.Constructors.Enabled)
+	assert.Equal(t, []string{"^Factory[A-Z]", "^Build[A-Z]"}, cfg.Constructors.NamePatterns)
+	assert.False(t, cfg.Constructors.ExportedOnly)
+	assert.Equal(t, []string{"^example\\.com/project/iface\\.Allowed$"}, cfg.Constructors.IgnoreInterfaces)
+	assert.False(t, cfg.Constructors.IgnoreErrorReturn)
+}
+
+func TestParseFromAny_UnknownConstructorsKeys(t *testing.T) {
+	t.Parallel()
+
+	settings := map[string]any{
+		"constructors": map[string]any{
+			"unknown": true,
+		},
+	}
+
+	_, err := config.ParseFromAny(settings)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown keys in constructors")
+	assert.Contains(t, err.Error(), "unknown")
+	assert.Contains(t, err.Error(), "namepatterns")
+	assert.Contains(t, err.Error(), "ignoreerrorreturn")
+}
+
 func TestParseFromAny_AllSettings(t *testing.T) {
 	t.Parallel()
 
@@ -239,6 +280,13 @@ func TestParseFromAny_AllSettings(t *testing.T) {
 			"requireassertions":        true,
 			"requireassertionsstrict":  true,
 			"checkbypassassertions":    true,
+		},
+		"constructors": map[string]any{
+			"enabled":           true,
+			"namepatterns":      []string{"^New[A-Z]", "^MustNew[A-Z]"},
+			"exportedonly":      true,
+			"ignoreinterfaces":  []string{"^example\\.com/project/iface\\.Allowed$"},
+			"ignoreerrorreturn": true,
 		},
 		"exclude": map[string]any{
 			"files": []string{".*_mock\\.go$"},
@@ -266,6 +314,13 @@ func TestParseFromAny_AllSettings(t *testing.T) {
 	assert.True(t, cfg.Assertions.RequireAssertions)
 	assert.True(t, cfg.Assertions.RequireAssertionsStrict)
 	assert.True(t, cfg.Assertions.CheckBypassAssertions)
+
+	// Verify constructors settings.
+	assert.True(t, cfg.Constructors.Enabled)
+	assert.Equal(t, []string{"^New[A-Z]", "^MustNew[A-Z]"}, cfg.Constructors.NamePatterns)
+	assert.True(t, cfg.Constructors.ExportedOnly)
+	assert.Equal(t, []string{"^example\\.com/project/iface\\.Allowed$"}, cfg.Constructors.IgnoreInterfaces)
+	assert.True(t, cfg.Constructors.IgnoreErrorReturn)
 
 	// Verify Exclude.
 	assert.Equal(t, []string{".*_mock\\.go$"}, cfg.Exclude.Files)
