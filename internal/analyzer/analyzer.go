@@ -274,11 +274,7 @@ func constructorInterfaceIgnored(
 	}
 
 	fullName := objPkg.Path() + "." + obj.Name()
-	if isTypeExcluded(exclude, fullName) {
-		return true
-	}
-
-	return matchesAnyPattern(fullName, cfg.IgnoreInterfaces)
+	return isTypeExcluded(exclude, fullName) || matchesAnyPattern(fullName, cfg.IgnoreInterfaces)
 }
 
 func constructorInterfaceLabel(obj *types.TypeName, currentPkgPath string) string {
@@ -1274,10 +1270,8 @@ func (a *analyzerState) shouldSkipRequireAssertionsInterface(
 	ownership config.CompiledOwnershipConfig,
 	ifaceInfo *interfaceRefInfo,
 ) bool {
-	if isOwnershipInterfaceIgnored(ownership, ifaceInfo.fullName, ifaceInfo.named) {
-		return true
-	}
-	return !a.isContractualInterfaceForRequireAssertions(ownership, ifaceInfo)
+	return isOwnershipInterfaceIgnored(ownership, ifaceInfo.fullName, ifaceInfo.named) ||
+		!a.isContractualInterfaceForRequireAssertions(ownership, ifaceInfo)
 }
 
 func reportMissingAssertionIfNeeded(
@@ -1385,10 +1379,8 @@ func implementsInterfaceForRequireAssertions(implType *types.Named, iface *types
 		return false
 	}
 
-	if methodSetSatisfiesInterface(types.NewMethodSet(implType), ifaceMethods) {
-		return true
-	}
-	return methodSetSatisfiesInterface(types.NewMethodSet(types.NewPointer(implType)), ifaceMethods)
+	return methodSetSatisfiesInterface(types.NewMethodSet(implType), ifaceMethods) ||
+		methodSetSatisfiesInterface(types.NewMethodSet(types.NewPointer(implType)), ifaceMethods)
 }
 
 func interfaceMethodSignaturesForImpl(
