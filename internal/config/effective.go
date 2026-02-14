@@ -13,9 +13,10 @@ type EffectiveOwnershipConfig struct {
 
 // EffectiveConfig contains configuration with all runtime defaults resolved.
 type EffectiveConfig struct {
-	Ownership  EffectiveOwnershipConfig
-	Assertions AssertionsConfig // Assertions has no runtime-dependent defaults
-	Exclude    ExcludeConfig
+	Ownership    EffectiveOwnershipConfig
+	Assertions   AssertionsConfig // Assertions has no runtime-dependent defaults
+	Constructors ConstructorsConfig
+	Exclude      ExcludeConfig
 }
 
 // ResolveEffective resolves runtime-dependent defaults in the config.
@@ -34,8 +35,9 @@ func (c Config) ResolveEffective() EffectiveConfig {
 			IgnoreInterfaces:       c.Ownership.IgnoreInterfaces,
 			IgnoreMarkerInterfaces: c.Ownership.IgnoreMarkerInterfaces,
 		},
-		Assertions: c.Assertions,
-		Exclude:    c.Exclude,
+		Assertions:   c.Assertions,
+		Constructors: c.Constructors,
+		Exclude:      c.Exclude,
 	}
 }
 
@@ -61,15 +63,21 @@ func (ec EffectiveConfig) Compile() (CompiledConfig, error) {
 		return CompiledConfig{}, err
 	}
 
+	compiledConstructors, err := compileConstructors(ec.Constructors)
+	if err != nil {
+		return CompiledConfig{}, err
+	}
+
 	compiledExclude, err := compileExclude(ec.Exclude)
 	if err != nil {
 		return CompiledConfig{}, err
 	}
 
 	return CompiledConfig{
-		Ownership:  compiledOwnership,
-		Assertions: compiledAssertions,
-		Exclude:    compiledExclude,
+		Ownership:    compiledOwnership,
+		Assertions:   compiledAssertions,
+		Constructors: compiledConstructors,
+		Exclude:      compiledExclude,
 	}, nil
 }
 

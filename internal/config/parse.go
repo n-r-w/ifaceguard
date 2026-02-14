@@ -34,6 +34,10 @@ func ParseFromAny(settings any) (Config, error) {
 		return Config{}, fmt.Errorf("config: assertions: %w", err)
 	}
 
+	if err := parseConstructorsSettings(&cfg.Constructors, m); err != nil {
+		return Config{}, fmt.Errorf("config: constructors: %w", err)
+	}
+
 	if err := parseExcludeSettings(&cfg.Exclude, m); err != nil {
 		return Config{}, fmt.Errorf("config: exclude: %w", err)
 	}
@@ -147,6 +151,40 @@ func parseExcludeSettings(exclude *ExcludeConfig, m map[string]any) error {
 	return nil
 }
 
+// parseConstructorsSettings parses the "constructors" section from a settings map.
+func parseConstructorsSettings(constructors *ConstructorsConfig, m map[string]any) error {
+	section := getSection(m, "constructors")
+	if section == nil {
+		return nil
+	}
+
+	if err := validateUnknownKeys("constructors", section, allowedConstructorsKeys()); err != nil {
+		return err
+	}
+
+	if v, ok := getBool(section, "enabled"); ok {
+		constructors.Enabled = v
+	}
+
+	if v, ok := getStringSlice(section, "namepatterns"); ok {
+		constructors.NamePatterns = v
+	}
+
+	if v, ok := getBool(section, "exportedonly"); ok {
+		constructors.ExportedOnly = v
+	}
+
+	if v, ok := getStringSlice(section, "ignoreinterfaces"); ok {
+		constructors.IgnoreInterfaces = v
+	}
+
+	if v, ok := getBool(section, "ignoreerrorreturn"); ok {
+		constructors.IgnoreErrorReturn = v
+	}
+
+	return nil
+}
+
 // validateContractScope checks if the given scope is a valid enum value.
 func validateContractScope(scope ContractScope) error {
 	switch scope {
@@ -166,6 +204,7 @@ func allowedTopLevelKeys() []string {
 	return []string{
 		"ownership",
 		"assertions",
+		"constructors",
 		"exclude",
 	}
 }
@@ -190,6 +229,16 @@ func allowedAssertionsKeys() []string {
 		"requireassertions",
 		"requireassertionsstrict",
 		"checkbypassassertions",
+	}
+}
+
+func allowedConstructorsKeys() []string {
+	return []string{
+		"enabled",
+		"namepatterns",
+		"exportedonly",
+		"ignoreinterfaces",
+		"ignoreerrorreturn",
 	}
 }
 

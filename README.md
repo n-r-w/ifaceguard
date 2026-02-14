@@ -94,6 +94,14 @@ assertions:
   scanfunctionbodies: false
   requireassertions: false
   requireassertionsstrict: false
+constructors:
+  enabled: false
+  namepatterns:
+    - "^New[A-Z]"
+    - "^MustNew[A-Z]"
+  exportedonly: true
+  ignoreinterfaces: []
+  ignoreerrorreturn: true
 exclude:
   # Regexes applied to full file paths
   files:
@@ -166,6 +174,15 @@ settings:
           scanfunctionbodies: false
           requireassertions: false
           requireassertionsstrict: false
+        constructors:
+          enabled: false
+          namepatterns:
+            - "^New[A-Z]"
+            - "^MustNew[A-Z]"
+          exportedonly: true
+          ignoreinterfaces:
+            - "^example\\.com/project/contract\\.Allowed$"
+          ignoreerrorreturn: true
         exclude:
           # Regexes applied to full file paths
           files:
@@ -200,6 +217,14 @@ settings:
   When enabled, ifaceguard scans all packages in the current module to find contractual interfaces, so missing assertions are reported even if the implementation package does not reference the interface directly.
 - `requireassertionsstrict` (bool, default: false): if true, disables the relevance filter for IFG003 and reports missing assertions for any matching contractual interface in the module, even when no direct import/co-import evidence exists.
 
+#### `constructors`
+
+- `enabled` (bool, default: false): toggles constructor return checks (IFG005). When false, no constructor-return diagnostics are reported.
+- `namepatterns` (list[regex], default: `["^New[A-Z]", "^MustNew[A-Z]"]`): regexes matched against package-level function names to classify constructor-like functions.
+- `exportedonly` (bool, default: true): when true, only exported constructor-like functions are checked.
+- `ignoreinterfaces` (list[regex], default: empty): regexes matched against full interface names (`pkgpath.Interface`) to exclude from IFG005 checks.
+- `ignoreerrorreturn` (bool, default: true): when true, builtin `error` return values are ignored by IFG005.
+
 #### `exclude`
 
 - `files` (list[regex], default: empty): regexes matched against full file paths (with `/` separators). Matching files are skipped entirely.
@@ -217,6 +242,7 @@ The examples below use these diagnostic IDs:
 - `IFG002-ASSERTION-PLACEMENT`: assertion placed outside the implementation package.
 - `IFG003-ASSERTION-MISSING`: missing assertion when `requireassertions=true`.
 - `IFG004-ASSERTION-BYPASS`: bypass assertion form under `requireassertions=true`.
+- `IFG005-CONSTRUCTOR-INTERFACE-RETURN`: constructor returns interface instead of concrete implementation type.
 
 #### Ownership: `contractscope` and `skipifusedasinput`
 

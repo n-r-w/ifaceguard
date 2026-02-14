@@ -70,6 +70,26 @@ type AssertionsConfig struct {
 	CheckBypassAssertions bool
 }
 
+// ConstructorsConfig contains configuration for constructor return checks.
+type ConstructorsConfig struct {
+	// Enabled controls whether constructor return checks are active.
+	Enabled bool
+
+	// NamePatterns is a list of regex patterns matched against function names
+	// to classify package-level functions as constructors.
+	NamePatterns []string
+
+	// ExportedOnly limits constructor checks to exported functions.
+	ExportedOnly bool
+
+	// IgnoreInterfaces is a list of regex patterns matching full interface names
+	// ("pkgpath.InterfaceName") that should be excluded from constructor checks.
+	IgnoreInterfaces []string
+
+	// IgnoreErrorReturn excludes builtin error return values from constructor checks.
+	IgnoreErrorReturn bool
+}
+
 // ExcludeConfig contains global exclusion rules applied to all checks.
 type ExcludeConfig struct {
 	// Files is a list of regex patterns matching file paths
@@ -83,7 +103,8 @@ type ExcludeConfig struct {
 
 // Config contains all configuration for the ifaceguard linter.
 type Config struct {
-	Ownership  OwnershipConfig
-	Assertions AssertionsConfig
-	Exclude    ExcludeConfig
+	Ownership    OwnershipConfig
+	Assertions   AssertionsConfig
+	Constructors ConstructorsConfig
+	Exclude      ExcludeConfig
 }

@@ -26,6 +26,7 @@ const (
 	assertionsID     = "IFG002-ASSERTION-PLACEMENT"
 	assertionsMissID = "IFG003-ASSERTION-MISSING"
 	assertionsBypass = "IFG004-ASSERTION-BYPASS"
+	constructorsID   = "IFG005-CONSTRUCTOR-INTERFACE-RETURN"
 	minCoImportCount = 2
 )
 
@@ -84,6 +85,10 @@ func (a *analyzerState) run(pass *analysis.Pass) (any, error) {
 		}
 	}
 
+	if compiled.Constructors.Enabled {
+		a.checkConstructorsNoInterfaceReturn(pass, compiled.Constructors, compiled.Exclude)
+	}
+
 	return nil, nil //nolint:nilnil // analyzer returns no facts
 }
 
@@ -119,6 +124,174 @@ func (a *analyzerState) checkAssertions(
 	}
 
 	return nil
+}
+
+// checkConstructorsNoInterfaceReturn enforces that constructor-like functions return concrete types.
+func (a *analyzerState) checkConstructorsNoInterfaceReturn(
+	pass *analysis.Pass,
+	cfg config.CompiledConstructorsConfig,
+	exclude config.CompiledExcludeConfig,
+) {
+	for _, file := range pass.Files {
+		if file == nil || isFileExcluded(pass.Fset, file.Pos(), exclude) {
+			continue
+		}
+
+		for _, decl := range file.Decls {
+			funcDecl, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+
+			sig, ok := constructorSignature(pass, funcDecl, cfg)
+			if !ok {
+				continue
+			}
+
+			reportConstructorInterfaceReturns(pass, funcDecl, sig, cfg, exclude)
+		}
+	}
+}
+
+func constructorSignature(
+	pass *analysis.Pass,
+	decl *ast.FuncDecl,
+	cfg config.CompiledConstructorsConfig,
+) (*types.Signature, bool) {
+	if decl == nil || decl.Name == nil || decl.Recv != nil {
+		return nil, false
+	}
+	if cfg.ExportedOnly && !decl.Name.IsExported() {
+		return nil, false
+	}
+	if !matchesAnyPattern(decl.Name.Name, cfg.NamePatterns) {
+		return nil, false
+	}
+
+	obj := pass.TypesInfo.Defs[decl.Name]
+	fn, ok := obj.(*types.Func)
+	if !ok {
+		return nil, false
+	}
+
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok || sig.Results() == nil {
+		return nil, false
+	}
+
+	return sig, true
+}
+
+func reportConstructorInterfaceReturns(
+	pass *analysis.Pass,
+	decl *ast.FuncDecl,
+	sig *types.Signature,
+	cfg config.CompiledConstructorsConfig,
+	exclude config.CompiledExcludeConfig,
+) {
+	results := sig.Results()
+	pkgPath := pass.Pkg.Path()
+
+	for i := range results.Len() {
+		resultVar := results.At(i)
+		if resultVar == nil {
+			continue
+		}
+
+		ifaceLabel, shouldReport := constructorInterfaceResultLabel(
+			resultVar.Type(),
+			cfg,
+			exclude,
+			pkgPath,
+		)
+		if !shouldReport {
+			continue
+		}
+
+		msg := fmt.Sprintf(
+			"%s: constructor %q returns interface %q; return concrete implementation type instead",
+			constructorsID,
+			decl.Name.Name,
+			ifaceLabel,
+		)
+		reportDiagnostic(pass, resultVar.Pos(), constructorsID, msg)
+	}
+}
+
+// constructorInterfaceResultLabel classifies constructor return type for IFG005 reporting.
+func constructorInterfaceResultLabel(
+	resultType types.Type,
+	cfg config.CompiledConstructorsConfig,
+	exclude config.CompiledExcludeConfig,
+	currentPkgPath string,
+) (ifaceLabel string, shouldReport bool) {
+	unaliased := types.Unalias(resultType)
+
+	ifaceUnnamed, ok := unaliased.(*types.Interface)
+	if ok {
+		return types.TypeString(ifaceUnnamed, func(pkg *types.Package) string {
+			if pkg == nil {
+				return ""
+			}
+
+			return pkg.Name()
+		}), true
+	}
+
+	named, ok := unaliased.(*types.Named)
+	if !ok {
+		return "", false
+	}
+
+	if _, ok := named.Underlying().(*types.Interface); !ok {
+		return "", false
+	}
+
+	obj := typeutil.UnaliasTypeName(named.Obj())
+	if obj == nil {
+		return "", false
+	}
+
+	if constructorInterfaceIgnored(obj, cfg, exclude) {
+		return "", false
+	}
+
+	return constructorInterfaceLabel(obj, currentPkgPath), true
+}
+
+func constructorInterfaceIgnored(
+	obj *types.TypeName,
+	cfg config.CompiledConstructorsConfig,
+	exclude config.CompiledExcludeConfig,
+) bool {
+	objPkg := obj.Pkg()
+	if cfg.IgnoreErrorReturn && objPkg == nil && obj.Name() == "error" {
+		return true
+	}
+
+	if objPkg == nil {
+		return false
+	}
+
+	fullName := objPkg.Path() + "." + obj.Name()
+	if isTypeExcluded(exclude, fullName) {
+		return true
+	}
+
+	return matchesAnyPattern(fullName, cfg.IgnoreInterfaces)
+}
+
+func constructorInterfaceLabel(obj *types.TypeName, currentPkgPath string) string {
+	objPkg := obj.Pkg()
+	if objPkg == nil {
+		return obj.Name()
+	}
+
+	if objPkg.Path() == currentPkgPath {
+		return obj.Name()
+	}
+
+	return objPkg.Name() + "." + obj.Name()
 }
 
 func (a *analyzerState) checkVarDecl(
