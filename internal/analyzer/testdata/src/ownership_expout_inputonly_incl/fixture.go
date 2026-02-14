@@ -5,7 +5,7 @@ package ownership_expout_inputonly_incl
 
 // Validator is an interface that appears ONLY in exported function input params.
 // With skipifusedasinput=false, it IS contractual (input params count as exported output).
-type Validator interface { // want `IFG001-OWNERSHIP: interface Validator has implementation StrictValidator in same package; move interface to consumer package or dedicated contract package`
+type Validator interface { // want `IFG001-OWNERSHIP: interface "Validator" has implementation "StrictValidator" in same package; move interface to consumer package or dedicated contract package`
 	Validate(data []byte) error
 }
 

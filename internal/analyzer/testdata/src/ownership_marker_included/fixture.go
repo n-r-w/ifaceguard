@@ -2,7 +2,7 @@
 package ownership_marker_included
 
 // Marker is a marker interface (no methods).
-type Marker interface { // want `IFG001-OWNERSHIP: interface Marker has implementation MarkerImpl in same package; move interface to consumer package or dedicated contract package`
+type Marker interface { // want `IFG001-OWNERSHIP: interface "Marker" has implementation "MarkerImpl" in same package; move interface to consumer package or dedicated contract package`
 }
 
 // MarkerImpl implements Marker.

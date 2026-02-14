@@ -5,7 +5,7 @@ package ownership_expout_skipinput
 
 // Transformer is an interface that appears in both exported function input and output.
 // With skipifusedasinput=true (default), it IS still contractual because it appears in output.
-type Transformer interface { // want `IFG001-OWNERSHIP: interface Transformer has implementation IdentityTransformer in same package; move interface to consumer package or dedicated contract package`
+type Transformer interface { // want `IFG001-OWNERSHIP: interface "Transformer" has implementation "IdentityTransformer" in same package; move interface to consumer package or dedicated contract package`
 	Transform(data []byte) ([]byte, error)
 }
 

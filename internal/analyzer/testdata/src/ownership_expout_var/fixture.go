@@ -4,7 +4,7 @@ package ownership_expout_var
 
 // Handler is an interface that appears in exported variable type.
 // With contractscope=exportedoutput, this IS contractual.
-type Handler interface { // want `IFG001-OWNERSHIP: interface Handler has implementation DefaultHandler in same package; move interface to consumer package or dedicated contract package`
+type Handler interface { // want `IFG001-OWNERSHIP: interface "Handler" has implementation "DefaultHandler" in same package; move interface to consumer package or dedicated contract package`
 	Handle() error
 }
 

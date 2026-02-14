@@ -4,7 +4,7 @@ package ownership_expout_func_result
 
 // Runner is an interface that appears in exported function result.
 // With contractscope=exportedoutput, this IS contractual.
-type Runner interface { // want `IFG001-OWNERSHIP: interface Runner has implementation Service in same package; move interface to consumer package or dedicated contract package`
+type Runner interface { // want `IFG001-OWNERSHIP: interface "Runner" has implementation "Service" in same package; move interface to consumer package or dedicated contract package`
 	Run() error
 }
 
