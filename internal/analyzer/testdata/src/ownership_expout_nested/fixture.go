@@ -4,7 +4,7 @@ package ownership_expout_nested
 
 // Processor is an interface that appears nested in exported function result.
 // With contractscope=exportedoutput, this IS contractual via Contains() predicate.
-type Processor interface { // want `IFG001-OWNERSHIP: interface Processor has implementation BasicProcessor in same package; move interface to consumer package or dedicated contract package`
+type Processor interface { // want `IFG001-OWNERSHIP: interface "Processor" has implementation "BasicProcessor" in same package; move interface to consumer package or dedicated contract package`
 	Process() error
 }
 

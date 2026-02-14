@@ -4,7 +4,7 @@ package ownership_expout_method_result
 
 // Worker is an interface that appears in exported method result.
 // With contractscope=exportedoutput, this IS contractual.
-type Worker interface { // want `IFG001-OWNERSHIP: interface Worker has implementation Task in same package; move interface to consumer package or dedicated contract package`
+type Worker interface { // want `IFG001-OWNERSHIP: interface "Worker" has implementation "Task" in same package; move interface to consumer package or dedicated contract package`
 	Work() error
 }
 

@@ -273,8 +273,8 @@ func (a *analyzerState) checkAssertionSpec(
 
 		// Report violation at the variable declaration position.
 		msg := fmt.Sprintf(
-			"%s: compile-time assertion for type `%s` should be in package `%s`. "+
-				"Current package: `%s`",
+			"%s: compile-time assertion for type %q should be in package %q. "+
+				"Current package: %q",
 			assertionsID,
 			implType.Obj().Name(),
 			implPkg.Name(),
@@ -893,8 +893,8 @@ func reportMissingAssertionIfNeeded(
 	}
 
 	msg := fmt.Sprintf(
-		"%s: missing compile-time assertion for type `%s` implementing interface `%s`. "+
-			"Use `var _ %s.%s = (*%s)(nil)` in package `%s` to assert",
+		"%s: missing compile-time assertion for type %q implementing interface %q. "+
+			"Use `var _ %s.%s = (*%s)(nil)` in package %q to assert",
 		assertionsMissID,
 		implObj.Name(),
 		ifaceObj.Name(),
@@ -1294,7 +1294,7 @@ func reportOwnershipViolation(
 	implTypeName string,
 ) {
 	msg := fmt.Sprintf(
-		"%s: interface `%s` has implementation `%s` in same package; "+
+		"%s: interface %q has implementation %q in same package; "+
 			"move interface to consumer package or dedicated contract package",
 		ownershipID,
 		ifaceName,
