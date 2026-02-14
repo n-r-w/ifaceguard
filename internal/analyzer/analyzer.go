@@ -274,11 +274,7 @@ func constructorInterfaceIgnored(
 	}
 
 	fullName := objPkg.Path() + "." + obj.Name()
-	if isTypeExcluded(exclude, fullName) {
-		return true
-	}
-
-	return matchesAnyPattern(fullName, cfg.IgnoreInterfaces)
+	return isTypeExcluded(exclude, fullName) || matchesAnyPattern(fullName, cfg.IgnoreInterfaces)
 }
 
 func constructorInterfaceLabel(obj *types.TypeName, currentPkgPath string) string {
@@ -1274,10 +1270,8 @@ func (a *analyzerState) shouldSkipRequireAssertionsInterface(
 	ownership config.CompiledOwnershipConfig,
 	ifaceInfo *interfaceRefInfo,
 ) bool {
-	if isOwnershipInterfaceIgnored(ownership, ifaceInfo.fullName, ifaceInfo.named) {
-		return true
-	}
-	return !a.isContractualInterfaceForRequireAssertions(ownership, ifaceInfo)
+	return isOwnershipInterfaceIgnored(ownership, ifaceInfo.fullName, ifaceInfo.named) ||
+		!a.isContractualInterfaceForRequireAssertions(ownership, ifaceInfo)
 }
 
 func reportMissingAssertionIfNeeded(
@@ -1385,10 +1379,8 @@ func implementsInterfaceForRequireAssertions(implType *types.Named, iface *types
 		return false
 	}
 
-	if methodSetSatisfiesInterface(types.NewMethodSet(implType), ifaceMethods) {
-		return true
-	}
-	return methodSetSatisfiesInterface(types.NewMethodSet(types.NewPointer(implType)), ifaceMethods)
+	return methodSetSatisfiesInterface(types.NewMethodSet(implType), ifaceMethods) ||
+		methodSetSatisfiesInterface(types.NewMethodSet(types.NewPointer(implType)), ifaceMethods)
 }
 
 func interfaceMethodSignaturesForImpl(
@@ -1516,12 +1508,45 @@ func signatureString(sig *types.Signature) string {
 	if sig == nil {
 		return ""
 	}
-	return types.TypeString(sig, func(pkg *types.Package) string {
+	normalized := signatureWithoutNames(sig)
+	return types.TypeString(normalized, func(pkg *types.Package) string {
 		if pkg == nil {
 			return ""
 		}
 		return pkg.Path()
 	})
+}
+
+func signatureWithoutNames(sig *types.Signature) *types.Signature {
+	if sig == nil {
+		return nil
+	}
+
+	return types.NewSignatureType(
+		sig.Recv(),
+		typeParamListToSlice(sig.RecvTypeParams()),
+		typeParamListToSlice(sig.TypeParams()),
+		tupleWithoutVarNames(sig.Params()),
+		tupleWithoutVarNames(sig.Results()),
+		sig.Variadic(),
+	)
+}
+
+func tupleWithoutVarNames(tuple *types.Tuple) *types.Tuple {
+	if tuple == nil {
+		return nil
+	}
+
+	vars := make([]*types.Var, tuple.Len())
+	for i := range tuple.Len() {
+		variable := tuple.At(i)
+		if variable == nil {
+			continue
+		}
+		vars[i] = types.NewVar(variable.Pos(), variable.Pkg(), "", variable.Type())
+	}
+
+	return types.NewTuple(vars...)
 }
 
 func stripReceiver(sig *types.Signature) *types.Signature {

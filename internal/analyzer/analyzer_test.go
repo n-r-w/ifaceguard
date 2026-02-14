@@ -609,6 +609,22 @@ func TestAssertions_RequireAssertions_Strict_Enabled_NoCoImport(t *testing.T) {
 	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_strict/impl")
 }
 
+func TestAssertions_RequireAssertions_Strict_ParamNameDifference(t *testing.T) {
+	t.Parallel()
+
+	testdataDir := moduleTestdataDir(t)
+	cfg := config.Default()
+	cfg.Assertions.RequireAssertions = true
+	cfg.Assertions.RequireAssertionsStrict = true
+	scope := config.ContractScopeAnyExported
+	cfg.Ownership.ContractScope = &scope
+
+	a, err := analyzer.New(cfg)
+	require.NoError(t, err)
+
+	analysistest.Run(t, testdataDir, a, "ifaceguard-testdata/assertions_requireassertions_paramnames/impl")
+}
+
 func TestAssertions_RequireAssertions_BypassUnnamedInterface(t *testing.T) {
 	t.Parallel()
 
