@@ -44,6 +44,19 @@ These checks can be enabled or disabled independently via `ownership.enabled` an
 go install github.com/n-r-w/ifaceguard/cmd/ifaceguard@latest
 ```
 
+### Homebrew
+
+```bash
+brew install n-r-w/homebrew-tap/ifaceguard
+```
+
+You can also tap first and install by formula name:
+
+```bash
+brew tap n-r-w/tap
+brew install ifaceguard
+```
+
 ### From releases
 
 Prebuilt artifacts are published on the [GitHub Releases page](https://github.com/n-r-w/ifaceguard/releases).

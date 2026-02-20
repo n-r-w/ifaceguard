@@ -28,5 +28,17 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+brews:
+  - name: ifaceguard
+    ids:
+      - ifaceguard
+    directory: Formula
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    repository:
+      owner: n-r-w
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+
 release:
   draft: false
