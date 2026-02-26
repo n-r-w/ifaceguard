@@ -20,6 +20,7 @@ import (
 
 const (
 	defaultContextLines      = -1
+	defaultExecutableName    = "ifaceguard"
 	diagnosticsExitCodeValue = 3
 	noErrorsFoundMessage     = "ifaceguard: no errors found"
 )
@@ -393,9 +394,8 @@ func configAnalyzer(cfg config.Config) (*analysis.Analyzer, error) {
 
 func printVersion(out io.Writer) error {
 	info, ok := debug.ReadBuildInfo()
-	name := filepath.Base(os.Args[0])
 	if !ok {
-		_, err := fmt.Fprintf(out, "%s version unknown\n", name)
+		_, err := fmt.Fprintf(out, "%s version unknown\n", defaultExecutableName)
 		return err
 	}
 
@@ -404,7 +404,7 @@ func printVersion(out io.Writer) error {
 		version = "devel"
 	}
 
-	_, err := fmt.Fprintf(out, "%s version %s\n", name, version)
+	_, err := fmt.Fprintf(out, "%s version %s\n", defaultExecutableName, version)
 	return err
 }
 
