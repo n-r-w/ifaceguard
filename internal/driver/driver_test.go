@@ -70,7 +70,7 @@ func TestRun_FailFastOnPackageErrors(t *testing.T) {
 	goModPath := filepath.Join(tempDir, "go.mod")
 	goMod := `module example.com/broken
 
-go 1.25
+go 1.26
 `
 	require.NoError(t, os.WriteFile(goModPath, []byte(goMod), 0o600))
 
@@ -109,7 +109,7 @@ func TestRun_PrintNoErrorsMessage(t *testing.T) {
 	goModPath := filepath.Join(tempDir, "go.mod")
 	goMod := `module example.com/clean
 
-go 1.25
+go 1.26
 `
 	require.NoError(t, os.WriteFile(goModPath, []byte(goMod), 0o600))
 
@@ -148,7 +148,7 @@ func TestRun_JSONOutputDoesNotPrintNoErrorsMessage(t *testing.T) {
 	goModPath := filepath.Join(tempDir, "go.mod")
 	goMod := `module example.com/cleanjson
 
-go 1.25
+go 1.26
 `
 	require.NoError(t, os.WriteFile(goModPath, []byte(goMod), 0o600))
 
