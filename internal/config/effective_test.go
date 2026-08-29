@@ -3,9 +3,10 @@ package config_test
 import (
 	"testing"
 
-	"github.com/n-r-w/ifaceguard/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/n-r-w/ifaceguard/internal/config"
 )
 
 func TestResolveEffective_UnsetScope_DefaultsToExportedOutput(t *testing.T) {

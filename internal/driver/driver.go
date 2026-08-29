@@ -11,11 +11,12 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/n-r-w/ifaceguard/internal/analyzer"
-	"github.com/n-r-w/ifaceguard/internal/config"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/checker"
 	"golang.org/x/tools/go/packages"
+
+	"github.com/n-r-w/ifaceguard/internal/analyzer"
+	"github.com/n-r-w/ifaceguard/internal/config"
 )
 
 const (
@@ -132,7 +133,7 @@ func newFlagSet(a *analysis.Analyzer, opts Options) (*flag.FlagSet, *driverFlags
 	return fs, flags
 }
 
-func handleMetaFlags(flags *driverFlags, opts Options) (bool, int) {
+func handleMetaFlags(flags *driverFlags, opts Options) (handled bool, exitCode int) {
 	if flags.version {
 		if err := printVersion(opts.Stdout); err != nil {
 			_, _ = fmt.Fprintln(opts.Stderr, err)

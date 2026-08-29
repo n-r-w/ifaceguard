@@ -298,7 +298,7 @@ func getSection(m map[string]any, key string) map[string]any {
 }
 
 // getBool returns a boolean value for a given key (case-insensitive).
-func getBool(m map[string]any, key string) (bool, bool) {
+func getBool(m map[string]any, key string) (value, ok bool) {
 	for k, v := range m {
 		if strings.EqualFold(k, key) {
 			if b, ok := v.(bool); ok {

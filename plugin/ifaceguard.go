@@ -28,9 +28,10 @@
 package main
 
 import (
+	"golang.org/x/tools/go/analysis"
+
 	"github.com/n-r-w/ifaceguard/internal/analyzer"
 	"github.com/n-r-w/ifaceguard/internal/config"
-	"golang.org/x/tools/go/analysis"
 )
 
 // New creates ifaceguard analyzers from golangci-lint configuration.

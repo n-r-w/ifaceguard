@@ -3,9 +3,10 @@ package config_test
 import (
 	"testing"
 
-	"github.com/n-r-w/ifaceguard/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/n-r-w/ifaceguard/internal/config"
 )
 
 func TestParseFromAny_NilSettings(t *testing.T) {

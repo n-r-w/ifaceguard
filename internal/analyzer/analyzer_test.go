@@ -4,11 +4,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/n-r-w/ifaceguard/internal/analyzer"
-	"github.com/n-r-w/ifaceguard/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/analysis/analysistest"
+
+	"github.com/n-r-w/ifaceguard/internal/analyzer"
+	"github.com/n-r-w/ifaceguard/internal/config"
 )
 
 func moduleTestdataDir(t *testing.T) string {
