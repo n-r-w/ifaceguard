@@ -32,6 +32,8 @@ func RunAnalysisTest(t *testing.T, testdataDir string, a *analysis.Analyzer, pat
 }
 
 // TestdataDir returns the absolute path to the testdata directory for the analyzer package.
+//
+//nolint:paralleltest // TestdataDir is a helper and does not define a test.
 func TestdataDir(t *testing.T) string {
 	t.Helper()
 

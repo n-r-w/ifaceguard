@@ -13,10 +13,11 @@ import (
 	"regexp"
 	"sync"
 
-	"github.com/n-r-w/ifaceguard/internal/config"
-	"github.com/n-r-w/ifaceguard/internal/typeutil"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/packages"
+
+	"github.com/n-r-w/ifaceguard/internal/config"
+	"github.com/n-r-w/ifaceguard/internal/typeutil"
 )
 
 // AnalyzerName is the identifier used for the analyzer in reports and configuration.
@@ -47,9 +48,9 @@ func New(cfg config.Config) (*analysis.Analyzer, error) {
 }
 
 func newAnalyzer(cfg config.Config) (*analysis.Analyzer, error) {
-	//nolint:exhaustruct // global cache fields are optional and initialized lazily
+	//nolint:exhaustruct_v5 // Global cache fields are optional and initialized lazily.
 	a := &analyzerState{cfg: cfg}
-	//nolint:exhaustruct // zero values are appropriate for optional fields
+	//nolint:exhaustruct_v5 // Zero values are appropriate for optional fields.
 	return &analysis.Analyzer{
 		Name: AnalyzerName,
 		Doc:  "checks architectural properties of interface usage in Go code",
@@ -192,8 +193,7 @@ func reportConstructorInterfaceReturns(
 	results := sig.Results()
 	pkgPath := pass.Pkg.Path()
 
-	for i := range results.Len() {
-		resultVar := results.At(i)
+	for resultVar := range results.Variables() {
 		if resultVar == nil {
 			continue
 		}
@@ -362,6 +362,38 @@ func valueSpecFromAssertionAssign(stmt *ast.AssignStmt) *ast.ValueSpec {
 	}
 }
 
+// assertionInterfaceType returns the interface type used by a compile-time assertion.
+func assertionInterfaceType(
+	pass *analysis.Pass,
+	cfg config.CompiledAssertionsConfig,
+	exclude config.CompiledExcludeConfig,
+	spec *ast.ValueSpec,
+) types.Type {
+	if spec == nil || !hasBlankIdentifier(spec.Names) {
+		return nil
+	}
+
+	var lhsType types.Type
+	if spec.Type != nil {
+		lhsType = pass.TypesInfo.TypeOf(spec.Type)
+	} else if cfg.AcceptConversionOnlyForm {
+		lhsType = extractConversionTargetInterface(pass.TypesInfo, spec)
+	}
+	if lhsType == nil {
+		return nil
+	}
+	if _, ok := lhsType.Underlying().(*types.Interface); !ok {
+		return nil
+	}
+	if lhsNamed, ok := lhsType.(*types.Named); ok {
+		if fullName, ok := fullNamedTypeName(lhsNamed); ok && isTypeExcluded(exclude, fullName) {
+			return nil
+		}
+	}
+
+	return lhsType
+}
+
 // checkAssertionSpec checks a single ValueSpec for compile-time assertion violations.
 func (a *analyzerState) checkAssertionSpec(
 	pass *analysis.Pass,
@@ -369,34 +401,9 @@ func (a *analyzerState) checkAssertionSpec(
 	exclude config.CompiledExcludeConfig,
 	spec *ast.ValueSpec,
 ) []assertionInfo {
-	if !hasBlankIdentifier(spec.Names) {
-		return nil
-	}
-
-	// Determine LHS interface type based on spec form.
-	var lhsType types.Type
-	if spec.Type != nil {
-		// Explicit type annotation: var _ I = expr
-		lhsType = pass.TypesInfo.TypeOf(spec.Type)
-	} else if cfg.AcceptConversionOnlyForm {
-		// Conversion-only form: var _ = I(expr) - requires flag.
-		lhsType = extractConversionTargetInterface(pass.TypesInfo, spec)
-	}
-
+	lhsType := assertionInterfaceType(pass, cfg, exclude, spec)
 	if lhsType == nil {
 		return nil
-	}
-
-	// Check if underlying type is interface.
-	underlying := lhsType.Underlying()
-	if _, ok := underlying.(*types.Interface); !ok {
-		return nil
-	}
-
-	if lhsNamed, ok := lhsType.(*types.Named); ok {
-		if fullName, ok := fullNamedTypeName(lhsNamed); ok && isTypeExcluded(exclude, fullName) {
-			return nil
-		}
 	}
 
 	infos := make([]assertionInfo, 0, len(spec.Names))
@@ -639,34 +646,21 @@ func valueSpecUsesTypeNameInAssertion(
 	spec *ast.ValueSpec,
 	typeName *types.TypeName,
 ) bool {
-	if spec == nil || typeName == nil || !hasBlankIdentifier(spec.Names) {
+	if typeName == nil {
 		return false
 	}
 
-	var lhsType types.Type
-	if spec.Type != nil {
-		lhsType = pass.TypesInfo.TypeOf(spec.Type)
-	} else if cfg.AcceptConversionOnlyForm {
-		lhsType = extractConversionTargetInterface(pass.TypesInfo, spec)
-	}
+	lhsType := assertionInterfaceType(pass, cfg, exclude, spec)
 	if lhsType == nil {
 		return false
 	}
-
 	lhsNamed, ok := lhsType.(*types.Named)
 	if !ok {
-		return false
-	}
-	if _, ok := lhsType.Underlying().(*types.Interface); !ok {
 		return false
 	}
 
 	owner := typeutil.UnaliasTypeName(lhsNamed.Obj())
 	if owner == nil || owner != typeName {
-		return false
-	}
-
-	if fullName, ok := fullNamedTypeName(lhsNamed); ok && isTypeExcluded(exclude, fullName) {
 		return false
 	}
 
@@ -922,7 +916,7 @@ func collectGlobalState(
 		packages.NeedImports |
 		packages.NeedCompiledGoFiles
 
-	//nolint:exhaustruct // only relevant fields are set for package loading
+	//nolint:exhaustruct_v5 // Only relevant fields are set for package loading.
 	pkgs, err := packages.Load(&packages.Config{
 		Mode:  mode,
 		Dir:   moduleRoot,
@@ -1008,7 +1002,7 @@ func collectCoImports(pkgs []*packages.Package) map[string]map[string]struct{} {
 	return result
 }
 
-func addCoImport(result map[string]map[string]struct{}, left string, right string) {
+func addCoImport(result map[string]map[string]struct{}, left, right string) {
 	if left == "" || right == "" {
 		return
 	}
@@ -1021,7 +1015,7 @@ func addCoImport(result map[string]map[string]struct{}, left string, right strin
 }
 
 func buildPackagePass(pkg *packages.Package) *analysis.Pass {
-	//nolint:exhaustruct // only required fields are set for helper functions
+	//nolint:exhaustruct_v5 // Only required fields are set for helper functions.
 	return &analysis.Pass{
 		TypesInfo: pkg.TypesInfo,
 		Fset:      pkg.Fset,
@@ -1392,8 +1386,7 @@ func interfaceMethodSignaturesForImpl(
 	}
 	iface = iface.Complete()
 	result := make(map[string]string, iface.NumMethods())
-	for i := range iface.NumMethods() {
-		method := iface.Method(i)
+	for method := range iface.Methods() {
 		if method == nil {
 			continue
 		}
@@ -1434,8 +1427,7 @@ func methodSetSatisfiesInterface(
 
 func methodSetSignatures(methodSet *types.MethodSet) map[string]string {
 	result := make(map[string]string, methodSet.Len())
-	for i := range methodSet.Len() {
-		selection := methodSet.At(i)
+	for selection := range methodSet.Methods() {
 		fn, ok := selection.Obj().(*types.Func)
 		if !ok {
 			continue
@@ -1453,7 +1445,7 @@ func methodSetSignatures(methodSet *types.MethodSet) map[string]string {
 	return result
 }
 
-func interfacesEquivalent(left *types.Interface, right *types.Interface) bool {
+func interfacesEquivalent(left, right *types.Interface) bool {
 	if left == nil || right == nil {
 		return false
 	}
@@ -1476,8 +1468,7 @@ func interfaceSignatureMap(iface *types.Interface) map[string]string {
 	}
 	iface = iface.Complete()
 	result := make(map[string]string, iface.NumMethods())
-	for i := range iface.NumMethods() {
-		method := iface.Method(i)
+	for method := range iface.Methods() {
 		if method == nil {
 			continue
 		}
@@ -1711,7 +1702,7 @@ func reportDiagnostic(
 	category string,
 	message string,
 ) {
-	//nolint:exhaustruct // optional fields use zero values
+	//nolint:exhaustruct_v5 // Optional fields use zero values.
 	pass.Report(analysis.Diagnostic{
 		Pos:      pos,
 		Category: category,
@@ -1940,8 +1931,7 @@ func collectFromTypeDecl(
 			continue
 		}
 
-		for i := range named.NumMethods() {
-			method := named.Method(i)
+		for method := range named.Methods() {
 			if !method.Exported() {
 				continue
 			}
@@ -2024,8 +2014,8 @@ func collectInterfacesInTuple(
 	if tuple == nil {
 		return found
 	}
-	for i := range tuple.Len() {
-		markInterfacesInType(tuple.At(i).Type(), interfaces, found)
+	for v := range tuple.Variables() {
+		markInterfacesInType(v.Type(), interfaces, found)
 	}
 	return found
 }

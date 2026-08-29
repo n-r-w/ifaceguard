@@ -31,9 +31,10 @@ package golangci
 
 import (
 	"github.com/golangci/plugin-module-register/register"
+	"golang.org/x/tools/go/analysis"
+
 	"github.com/n-r-w/ifaceguard/internal/analyzer"
 	"github.com/n-r-w/ifaceguard/internal/config"
-	"golang.org/x/tools/go/analysis"
 )
 
 //nolint:gochecknoinits // init() is required for golangci-lint module plugin registration

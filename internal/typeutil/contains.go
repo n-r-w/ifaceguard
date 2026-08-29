@@ -81,8 +81,8 @@ func containsWalkMap(target *types.TypeName, typ *types.Map, visited map[types.T
 }
 
 func containsWalkStruct(target *types.TypeName, typ *types.Struct, visited map[types.Type]bool) bool {
-	for i := range typ.NumFields() {
-		if containsWalk(target, typ.Field(i).Type(), visited) {
+	for field := range typ.Fields() {
+		if containsWalk(target, field.Type(), visited) {
 			return true
 		}
 	}
@@ -90,8 +90,8 @@ func containsWalkStruct(target *types.TypeName, typ *types.Struct, visited map[t
 }
 
 func containsWalkTuple(target *types.TypeName, typ *types.Tuple, visited map[types.Type]bool) bool {
-	for i := range typ.Len() {
-		if containsWalk(target, typ.At(i).Type(), visited) {
+	for v := range typ.Variables() {
+		if containsWalk(target, v.Type(), visited) {
 			return true
 		}
 	}
@@ -106,13 +106,13 @@ func containsWalkSignature(target *types.TypeName, typ *types.Signature, visited
 }
 
 func containsWalkInterface(target *types.TypeName, typ *types.Interface, visited map[types.Type]bool) bool {
-	for i := range typ.NumEmbeddeds() {
-		if containsWalk(target, typ.EmbeddedType(i), visited) {
+	for etyp := range typ.EmbeddedTypes() {
+		if containsWalk(target, etyp, visited) {
 			return true
 		}
 	}
-	for i := range typ.NumMethods() {
-		if containsWalk(target, typ.Method(i).Type(), visited) {
+	for method := range typ.Methods() {
+		if containsWalk(target, method.Type(), visited) {
 			return true
 		}
 	}

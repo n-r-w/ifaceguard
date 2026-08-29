@@ -8,10 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/n-r-w/ifaceguard/internal/analyzer"
-	"github.com/n-r-w/ifaceguard/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/n-r-w/ifaceguard/internal/analyzer"
+	"github.com/n-r-w/ifaceguard/internal/config"
 )
 
 func TestLoadConfig_Default(t *testing.T) {
@@ -63,14 +64,14 @@ func TestNewFlagSet_ConfigFlagName(t *testing.T) {
 	assert.Nil(t, fs.Lookup("c"))
 }
 
+//nolint:paralleltest // t.Chdir changes the process-wide working directory.
 func TestRun_FailFastOnPackageErrors(t *testing.T) {
-	// Do not use t.Parallel here: t.Chdir changes process-wide working directory.
 	tempDir := t.TempDir()
 
 	goModPath := filepath.Join(tempDir, "go.mod")
 	goMod := `module example.com/broken
 
-go 1.26
+go 1.27
 `
 	require.NoError(t, os.WriteFile(goModPath, []byte(goMod), 0o600))
 
@@ -102,14 +103,14 @@ func f() {
 	assert.NotContains(t, output, "analysis skipped due to errors in package")
 }
 
+//nolint:paralleltest // t.Chdir changes the process-wide working directory.
 func TestRun_PrintNoErrorsMessage(t *testing.T) {
-	// Do not use t.Parallel here: t.Chdir changes process-wide working directory.
 	tempDir := t.TempDir()
 
 	goModPath := filepath.Join(tempDir, "go.mod")
 	goMod := `module example.com/clean
 
-go 1.26
+go 1.27
 `
 	require.NoError(t, os.WriteFile(goModPath, []byte(goMod), 0o600))
 
@@ -141,14 +142,14 @@ func Value() int {
 	assert.Empty(t, stderr.String())
 }
 
+//nolint:paralleltest // t.Chdir changes the process-wide working directory.
 func TestRun_JSONOutputDoesNotPrintNoErrorsMessage(t *testing.T) {
-	// Do not use t.Parallel here: t.Chdir changes process-wide working directory.
 	tempDir := t.TempDir()
 
 	goModPath := filepath.Join(tempDir, "go.mod")
 	goMod := `module example.com/cleanjson
 
-go 1.26
+go 1.27
 `
 	require.NoError(t, os.WriteFile(goModPath, []byte(goMod), 0o600))
 
