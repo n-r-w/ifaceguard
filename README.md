@@ -34,10 +34,6 @@ flowchart LR
 
 These checks can be enabled or disabled independently via `ownership.enabled` and `assertions.enabled`.
 
-## Project Status
-
-⚠️ `ifaceguard` is in early development. The core analysis logic is implemented and tested, but the configuration and CLI are still evolving. Breaking changes to config keys and behavior are expected until the first stable release.
-
 ## Installation
 
 ```bash
